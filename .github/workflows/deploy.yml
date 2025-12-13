@@ -1,0 +1,77 @@
+# .github/workflows/deploy.yml
+
+name: CI/CD Laravel Deployment
+
+# Déclenchez le workflow sur chaque push vers la branche 'main' (ou 'master')
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # 1. Job de Test & Build (Continious Integration)
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.2' # Mettez à jour votre version de PHP
+        extensions: bcmath, pdo_mysql, zip, mbstring
+        coverage: none
+
+    - name: Cache Composer dependencies
+      uses: actions/cache@v4
+      with:
+        path: vendor
+        key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+        restore-keys: ${{ runner.os }}-composer-
+
+    - name: Install Dependencies
+      run: composer install --no-dev --prefer-dist
+
+    # - name: Run Tests (Décommentez si vous avez des tests)
+    #   run: vendor/bin/phpunit
+
+  # 2. Job de Déploiement (Continious Delivery)
+  deploy:
+    needs: build # Ne s'exécute que si 'build' réussit
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: SSH Deploy Command
+      uses: appleboy/ssh-action@v1.0.0 # Utilisez une action populaire pour les commandes SSH
+      with:
+        host: ${{ secrets.AWS_HOST }}
+        username: ${{ secrets.SSH_USERNAME }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          # 1. Aller au répertoire du projet
+          cd /var/www/monprojetlaravel
+
+          # 2. Pull le dernier code
+          git pull origin main
+
+          # 3. Mettre à jour les dépendances Laravel (si vous l'avez fait sur GitHub)
+          composer install --no-dev --prefer-dist
+
+          # 4. Exécuter les migrations
+          php artisan migrate --force
+
+          # 5. Vider le cache (Configuration, Route, Vue)
+          php artisan cache:clear
+          php artisan config:clear
+          php artisan route:clear
+          php artisan view:clear
+
+          # 6. Redémarrer PHP-FPM
+          sudo service php8.2-fpm restart # Changez 'php8.2-fpm' pour correspondre à votre service réel
+
+          echo "Déploiement terminé !"

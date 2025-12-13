@@ -5,7 +5,9 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ColiController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DeviseController;
 use App\Http\Controllers\EntrepriseTransporteurController;
+use App\Http\Controllers\TarifController;
 use Illuminate\Support\Facades\Route;
 
 // Routes publiques
@@ -50,5 +52,11 @@ Route::middleware('auth')->group(function () {
     // Entreprises Transporteurs (Admin uniquement)
     Route::middleware('role:admin')->group(function () {
         Route::resource('transporteurs', EntrepriseTransporteurController::class);
+    });
+
+    // Paramétrage (Admin uniquement)
+    Route::middleware('role:admin')->group(function () {
+        Route::resource('devises', DeviseController::class);
+        Route::resource('tarifs', TarifController::class);
     });
 });

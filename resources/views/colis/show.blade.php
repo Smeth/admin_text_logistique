@@ -31,7 +31,16 @@
             <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Agence Départ</p><p class="text-lg text-gray-900 dark:text-white mt-1">{{ $coli->agenceDepart->nom_agence }}</p></div>
             <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Agence Arrivée</p><p class="text-lg text-gray-900 dark:text-white mt-1">{{ $coli->agenceArrivee->nom_agence }}</p></div>
             <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Transporteur</p><p class="text-lg text-gray-900 dark:text-white mt-1">{{ $coli->transporteur ? $coli->transporteur->nom_entreprise : 'Non assigné' }}</p></div>
-            <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Frais Transport</p><p class="text-lg text-gray-900 dark:text-white mt-1">{{ number_format($coli->frais_transport, 0, ',', ' ') }} FCFA</p></div>
+            <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Devise</p><p class="text-lg text-gray-900 dark:text-white mt-1">{{ $coli->devise ? $coli->devise->nom . ' (' . $coli->devise->symbole . ')' : 'Non définie' }}</p></div>
+            <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Tarif</p><p class="text-lg text-gray-900 dark:text-white mt-1">{{ $coli->tarif ? $coli->tarif->nom_tarif : 'Aucun' }}</p></div>
+            <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Frais Transport</p>
+                <p class="text-lg text-gray-900 dark:text-white mt-1">
+                    {{ number_format($coli->frais_transport, 0, ',', ' ') }} {{ $coli->devise ? $coli->devise->symbole : 'FCFA' }}
+                    @if($coli->frais_calcule && $coli->frais_calcule != $coli->frais_transport)
+                        <span class="text-xs text-gray-500 dark:text-gray-400">(Calculé: {{ number_format($coli->frais_calcule, 0, ',', ' ') }})</span>
+                    @endif
+                </p>
+            </div>
             <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Date Envoi</p><p class="text-lg text-gray-900 dark:text-white mt-1">{{ $coli->date_envoi->format('d/m/Y') }}</p></div>
             <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Payé</p><p class="text-lg text-gray-900 dark:text-white mt-1">{{ $coli->paye ? 'Oui' : 'Non' }}</p></div>
         </div>

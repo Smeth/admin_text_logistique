@@ -43,13 +43,31 @@ class DashboardController extends Controller
             ? Coli::pourAgence($agenceId)->count()
             : Coli::count();
             
+        // Colis en transit (tous les statuts entre expédié et arrivé à l'entrepôt)
         $colisEnTransit = $agenceId
-            ? Coli::pourAgence($agenceId)->where('statut', 'en_transit')->count()
-            : Coli::where('statut', 'en_transit')->count();
+            ? Coli::pourAgence($agenceId)->whereIn('statut', [
+                'expedie_port',
+                'arrive_aeroport_depart',
+                'en_vol',
+                'arrive_aeroport_transit',
+                'arrive_aeroport_destination',
+                'en_dedouanement',
+                'arrive_entrepot'
+            ])->count()
+            : Coli::whereIn('statut', [
+                'expedie_port',
+                'arrive_aeroport_depart',
+                'en_vol',
+                'arrive_aeroport_transit',
+                'arrive_aeroport_destination',
+                'en_dedouanement',
+                'arrive_entrepot'
+            ])->count();
             
+        // Colis en attente (emballé)
         $colisEnAttente = $agenceId
-            ? Coli::pourAgence($agenceId)->where('statut', 'en_attente')->count()
-            : Coli::where('statut', 'en_attente')->count();
+            ? Coli::pourAgence($agenceId)->where('statut', 'emballe')->count()
+            : Coli::where('statut', 'emballe')->count();
         
         // Revenus du jour (transactions d'entrée d'aujourd'hui)
         $revenusJourQuery = Transaction::where('type', 'entree')

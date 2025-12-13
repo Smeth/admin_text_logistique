@@ -21,8 +21,14 @@
             <input type="text" name="search" value="{{ request('search') }}" placeholder="Rechercher..." class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-slate-700 dark:text-white">
             <select name="statut" class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-slate-700 dark:text-white">
                 <option value="">Tous les statuts</option>
-                <option value="en_attente" {{ request('statut') === 'en_attente' ? 'selected' : '' }}>En attente</option>
-                <option value="en_transit" {{ request('statut') === 'en_transit' ? 'selected' : '' }}>En transit</option>
+                <option value="emballe" {{ request('statut') === 'emballe' ? 'selected' : '' }}>Colis emballé</option>
+                <option value="expedie_port" {{ request('statut') === 'expedie_port' ? 'selected' : '' }}>Expédié vers port/aéroport</option>
+                <option value="arrive_aeroport_depart" {{ request('statut') === 'arrive_aeroport_depart' ? 'selected' : '' }}>Arrivé aéroport départ</option>
+                <option value="en_vol" {{ request('statut') === 'en_vol' ? 'selected' : '' }}>En vol</option>
+                <option value="arrive_aeroport_transit" {{ request('statut') === 'arrive_aeroport_transit' ? 'selected' : '' }}>Arrivé aéroport transit</option>
+                <option value="arrive_aeroport_destination" {{ request('statut') === 'arrive_aeroport_destination' ? 'selected' : '' }}>Arrivé aéroport destination</option>
+                <option value="en_dedouanement" {{ request('statut') === 'en_dedouanement' ? 'selected' : '' }}>En dédouanement</option>
+                <option value="arrive_entrepot" {{ request('statut') === 'arrive_entrepot' ? 'selected' : '' }}>Arrivé entrepôt</option>
                 <option value="livre" {{ request('statut') === 'livre' ? 'selected' : '' }}>Livré</option>
                 <option value="retourne" {{ request('statut') === 'retourne' ? 'selected' : '' }}>Retourné</option>
             </select>
@@ -51,11 +57,25 @@
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <span class="px-2 py-1 text-xs font-medium rounded-full 
                                     @if($coli->statut === 'livre') bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400
-                                    @elseif($coli->statut === 'en_transit') bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400
-                                    @elseif($coli->statut === 'en_attente') bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400
+                                    @elseif(in_array($coli->statut, ['expedie_port', 'arrive_aeroport_depart', 'en_vol', 'arrive_aeroport_transit', 'arrive_aeroport_destination', 'en_dedouanement', 'arrive_entrepot'])) bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400
+                                    @elseif($coli->statut === 'emballe') bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400
                                     @else bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400
                                     @endif">
-                                    {{ ucfirst(str_replace('_', ' ', $coli->statut)) }}
+                                    @php
+                                        $statutLabels = [
+                                            'emballe' => 'Colis emballé',
+                                            'expedie_port' => 'Expédié',
+                                            'arrive_aeroport_depart' => 'Aéroport départ',
+                                            'en_vol' => 'En vol',
+                                            'arrive_aeroport_transit' => 'Aéroport transit',
+                                            'arrive_aeroport_destination' => 'Aéroport destination',
+                                            'en_dedouanement' => 'En dédouanement',
+                                            'arrive_entrepot' => 'Entrepôt',
+                                            'livre' => 'Livré',
+                                            'retourne' => 'Retourné'
+                                        ];
+                                    @endphp
+                                    {{ $statutLabels[$coli->statut] ?? ucfirst(str_replace('_', ' ', $coli->statut)) }}
                                 </span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">

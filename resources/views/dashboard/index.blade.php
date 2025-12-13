@@ -188,11 +188,25 @@
                                 </div>
                                 <span class="px-2 py-1 text-xs font-medium rounded-full 
                                     @if($coli->statut === 'livre') bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400
-                                    @elseif($coli->statut === 'en_transit') bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400
-                                    @elseif($coli->statut === 'en_attente') bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400
+                                    @elseif(in_array($coli->statut, ['expedie_port', 'arrive_aeroport_depart', 'en_vol', 'arrive_aeroport_transit', 'arrive_aeroport_destination', 'en_dedouanement', 'arrive_entrepot'])) bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400
+                                    @elseif($coli->statut === 'emballe') bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400
                                     @else bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400
                                     @endif">
-                                    {{ ucfirst(str_replace('_', ' ', $coli->statut)) }}
+                                    @php
+                                        $statutLabels = [
+                                            'emballe' => 'Colis emballé',
+                                            'expedie_port' => 'Expédié',
+                                            'arrive_aeroport_depart' => 'Aéroport départ',
+                                            'en_vol' => 'En vol',
+                                            'arrive_aeroport_transit' => 'Aéroport transit',
+                                            'arrive_aeroport_destination' => 'Aéroport destination',
+                                            'en_dedouanement' => 'En dédouanement',
+                                            'arrive_entrepot' => 'Entrepôt',
+                                            'livre' => 'Livré',
+                                            'retourne' => 'Retourné'
+                                        ];
+                                    @endphp
+                                    {{ $statutLabels[$coli->statut] ?? ucfirst(str_replace('_', ' ', $coli->statut)) }}
                                 </span>
                             </div>
                         @endforeach

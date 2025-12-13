@@ -11,10 +11,25 @@
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-white">Colis #{{ $coli->numero_suivi }}</h3>
                 <span class="inline-block mt-2 px-3 py-1 text-sm font-medium rounded-full 
                     @if($coli->statut === 'livre') bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400
-                    @elseif($coli->statut === 'en_transit') bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400
-                    @else bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400
+                    @elseif(in_array($coli->statut, ['expedie_port', 'arrive_aeroport_depart', 'en_vol', 'arrive_aeroport_transit', 'arrive_aeroport_destination', 'en_dedouanement', 'arrive_entrepot'])) bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400
+                    @elseif($coli->statut === 'emballe') bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400
+                    @else bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400
                     @endif">
-                    {{ ucfirst(str_replace('_', ' ', $coli->statut)) }}
+                    @php
+                        $statutLabels = [
+                            'emballe' => 'Colis emballé',
+                            'expedie_port' => 'Expédié vers port/aéroport',
+                            'arrive_aeroport_depart' => 'Arrivé à l\'aéroport de départ',
+                            'en_vol' => 'En vol vers destination',
+                            'arrive_aeroport_transit' => 'Arrivé à l\'aéroport de transit',
+                            'arrive_aeroport_destination' => 'Arrivé à l\'aéroport de destination',
+                            'en_dedouanement' => 'En cours de dédouanement',
+                            'arrive_entrepot' => 'Arrivé à l\'entrepôt de destination',
+                            'livre' => 'Livré',
+                            'retourne' => 'Retourné'
+                        ];
+                    @endphp
+                    {{ $statutLabels[$coli->statut] ?? ucfirst(str_replace('_', ' ', $coli->statut)) }}
                 </span>
             </div>
             <div class="flex space-x-2">
@@ -165,11 +180,25 @@
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center justify-between">
                                 <p class="text-sm font-medium text-gray-900 dark:text-white">
+                                    @php
+                                        $statutLabels = [
+                                            'emballe' => 'Colis emballé',
+                                            'expedie_port' => 'Expédié vers port/aéroport',
+                                            'arrive_aeroport_depart' => 'Arrivé à l\'aéroport de départ',
+                                            'en_vol' => 'En vol vers destination',
+                                            'arrive_aeroport_transit' => 'Arrivé à l\'aéroport de transit',
+                                            'arrive_aeroport_destination' => 'Arrivé à l\'aéroport de destination',
+                                            'en_dedouanement' => 'En cours de dédouanement',
+                                            'arrive_entrepot' => 'Arrivé à l\'entrepôt de destination',
+                                            'livre' => 'Livré',
+                                            'retourne' => 'Retourné'
+                                        ];
+                                    @endphp
                                     @if($historique->statut_avant)
-                                        Statut changé de <span class="text-orange-600 dark:text-orange-400">{{ ucfirst(str_replace('_', ' ', $historique->statut_avant)) }}</span> 
-                                        vers <span class="text-green-600 dark:text-green-400">{{ ucfirst(str_replace('_', ' ', $historique->statut_apres)) }}</span>
+                                        Statut changé de <span class="text-orange-600 dark:text-orange-400">{{ $statutLabels[$historique->statut_avant] ?? ucfirst(str_replace('_', ' ', $historique->statut_avant)) }}</span> 
+                                        vers <span class="text-green-600 dark:text-green-400">{{ $statutLabels[$historique->statut_apres] ?? ucfirst(str_replace('_', ' ', $historique->statut_apres)) }}</span>
                                     @else
-                                        Colis créé avec le statut <span class="text-green-600 dark:text-green-400">{{ ucfirst(str_replace('_', ' ', $historique->statut_apres)) }}</span>
+                                        Colis créé avec le statut <span class="text-green-600 dark:text-green-400">{{ $statutLabels[$historique->statut_apres] ?? ucfirst(str_replace('_', ' ', $historique->statut_apres)) }}</span>
                                     @endif
                                 </p>
                                 <p class="text-xs text-gray-500 dark:text-gray-400">{{ $historique->created_at->format('d/m/Y H:i') }}</p>
@@ -180,7 +209,10 @@
                                 </p>
                             @endif
                             @if($historique->commentaire)
-                                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{{ $historique->commentaire }}</p>
+                                <div class="mt-2 p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description:</p>
+                                    <p class="text-sm text-gray-600 dark:text-gray-400">{{ $historique->commentaire }}</p>
+                                </div>
                             @endif
                             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                 Par: {{ $historique->user->name }}
@@ -193,5 +225,80 @@
     </div>
     @endif
 </div>
+
+<!-- Modal pour ajouter une étape -->
+@can('admin')
+<div id="addStepModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-slate-800">
+        <div class="mt-3">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Ajouter une étape de suivi</h3>
+                <button onclick="hideAddStepModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <form action="{{ route('colis.add-step', $coli) }}" method="POST" class="space-y-4">
+                @csrf
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Statut <span class="text-red-500">*</span>
+                    </label>
+                    <select name="statut_etape" required class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
+                        <option value="emballe">Colis emballé</option>
+                        <option value="expedie_port">Expédié vers le port/aéroport</option>
+                        <option value="arrive_aeroport_depart">Arrivé à l'aéroport de départ</option>
+                        <option value="en_vol">En vol vers destination</option>
+                        <option value="arrive_aeroport_transit">Arrivé à l'aéroport de transit</option>
+                        <option value="arrive_aeroport_destination">Arrivé à l'aéroport de destination</option>
+                        <option value="en_dedouanement">En cours de dédouanement</option>
+                        <option value="arrive_entrepot">Arrivé à l'entrepôt de destination</option>
+                        <option value="livre">Livré</option>
+                        <option value="retourne">Retourné</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Description <span class="text-red-500">*</span>
+                    </label>
+                    <textarea name="description_etape" required rows="4" 
+                              placeholder="Décrivez cette étape en détail..."
+                              class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Localisation
+                    </label>
+                    <input type="text" name="localisation_etape" 
+                           placeholder="Ex: Aéroport Yaoundé, Entrepôt Douala..."
+                           class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
+                </div>
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" onclick="hideAddStepModal()" class="px-4 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700">Annuler</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">Enregistrer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function showAddStepModal() {
+    document.getElementById('addStepModal').classList.remove('hidden');
+}
+
+function hideAddStepModal() {
+    document.getElementById('addStepModal').classList.add('hidden');
+}
+
+// Fermer le modal en cliquant à l'extérieur
+document.getElementById('addStepModal')?.addEventListener('click', function(e) {
+    if (e.target === this) {
+        hideAddStepModal();
+    }
+});
+</script>
+@endcan
 @endsection
 

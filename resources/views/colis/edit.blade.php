@@ -70,12 +70,44 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Statut <span class="text-red-500">*</span></label>
-                    <select name="statut" required class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
-                        <option value="en_attente" {{ old('statut', $coli->statut) === 'en_attente' ? 'selected' : '' }}>En attente</option>
-                        <option value="en_transit" {{ old('statut', $coli->statut) === 'en_transit' ? 'selected' : '' }}>En transit</option>
+                    <select name="statut" id="statut_select" required class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
+                        <option value="emballe" {{ old('statut', $coli->statut) === 'emballe' ? 'selected' : '' }}>Colis emballé</option>
+                        <option value="expedie_port" {{ old('statut', $coli->statut) === 'expedie_port' ? 'selected' : '' }}>Expédié vers le port/aéroport</option>
+                        <option value="arrive_aeroport_depart" {{ old('statut', $coli->statut) === 'arrive_aeroport_depart' ? 'selected' : '' }}>Arrivé à l'aéroport de départ</option>
+                        <option value="en_vol" {{ old('statut', $coli->statut) === 'en_vol' ? 'selected' : '' }}>En vol vers destination</option>
+                        <option value="arrive_aeroport_transit" {{ old('statut', $coli->statut) === 'arrive_aeroport_transit' ? 'selected' : '' }}>Arrivé à l'aéroport de transit</option>
+                        <option value="arrive_aeroport_destination" {{ old('statut', $coli->statut) === 'arrive_aeroport_destination' ? 'selected' : '' }}>Arrivé à l'aéroport de destination</option>
+                        <option value="en_dedouanement" {{ old('statut', $coli->statut) === 'en_dedouanement' ? 'selected' : '' }}>En cours de dédouanement</option>
+                        <option value="arrive_entrepot" {{ old('statut', $coli->statut) === 'arrive_entrepot' ? 'selected' : '' }}>Arrivé à l'entrepôt de destination</option>
                         <option value="livre" {{ old('statut', $coli->statut) === 'livre' ? 'selected' : '' }}>Livré</option>
                         <option value="retourne" {{ old('statut', $coli->statut) === 'retourne' ? 'selected' : '' }}>Retourné</option>
                     </select>
+                </div>
+                
+                <!-- Champs pour description et localisation (apparaissent si le statut change) -->
+                <div id="description_etape_container" class="md:col-span-2 hidden">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Description de l'étape
+                    </label>
+                    <textarea name="description_etape" 
+                              id="description_etape"
+                              rows="3"
+                              placeholder="Décrivez cette étape (ex: Colis arrivé à l'aéroport. En attente d'embarquement)"
+                              class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">{{ old('description_etape') }}</textarea>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Ajoutez des détails sur cette étape (optionnel mais recommandé)</p>
+                </div>
+                
+                <div id="localisation_etape_container" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Localisation actuelle
+                    </label>
+                    <input type="text" 
+                           name="localisation_etape" 
+                           id="localisation_etape"
+                           value="{{ old('localisation_etape') }}"
+                           placeholder="Ex: Aéroport Yaoundé, Entrepôt Douala..."
+                           class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Où se trouve le colis actuellement (optionnel)</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Date envoi <span class="text-red-500">*</span></label>

@@ -81,7 +81,7 @@ class ColiController extends Controller
             'dimensions' => 'nullable|string',
             'description_contenu' => 'nullable|string',
             'valeur_declaree' => 'nullable|numeric|min:0',
-            'statut' => 'required|in:en_attente,en_transit,livre,retourne',
+            'statut' => 'required|in:emballe,expedie_port,arrive_aeroport_depart,en_vol,arrive_aeroport_transit,arrive_aeroport_destination,en_dedouanement,arrive_entrepot,livre,retourne',
             'date_envoi' => 'required|date',
             'date_livraison_prevue' => 'nullable|date|after_or_equal:date_envoi',
             'agence_depart_id' => 'required|exists:agences,id',
@@ -98,6 +98,8 @@ class ColiController extends Controller
             'caisse_id' => 'nullable|required_with:paiement_complet,paiement_partiel|exists:caisses,id',
             'montant_paye' => 'nullable|required_with:paiement_partiel|numeric|min:0.01',
             'mode_paiement' => 'nullable|in:espece,carte,virement,cheque,mobile_money',
+            'description_etape' => 'nullable|string|max:1000',
+            'localisation_etape' => 'nullable|string|max:255',
         ]);
 
         // Retirer les champs de paiement de validated avant de créer le colis
@@ -106,8 +108,10 @@ class ColiController extends Controller
         $caisseId = $request->input('caisse_id');
         $montantPaye = $request->input('montant_paye');
         $modePaiement = $request->input('mode_paiement', 'espece');
+        $descriptionEtape = $request->input('description_etape');
+        $localisationEtape = $request->input('localisation_etape');
 
-        unset($validated['paiement_complet'], $validated['paiement_partiel'], $validated['caisse_id'], $validated['montant_paye'], $validated['mode_paiement']);
+        unset($validated['paiement_complet'], $validated['paiement_partiel'], $validated['caisse_id'], $validated['montant_paye'], $validated['mode_paiement'], $validated['description_etape'], $validated['localisation_etape']);
 
         $coli = Coli::create($validated);
         
@@ -117,8 +121,8 @@ class ColiController extends Controller
             'statut_avant' => null,
             'statut_apres' => $coli->statut,
             'user_id' => auth()->id(),
-            'commentaire' => 'Colis créé',
-            'localisation' => $coli->agenceDepart->nom_agence ?? null,
+            'commentaire' => $descriptionEtape ?: 'Colis créé',
+            'localisation' => $localisationEtape ?: ($coli->agenceDepart->nom_agence ?? null),
         ]);
         
         // Calculer automatiquement le prix si un tarif est sélectionné
@@ -246,7 +250,7 @@ class ColiController extends Controller
             'dimensions' => 'nullable|string',
             'description_contenu' => 'nullable|string',
             'valeur_declaree' => 'nullable|numeric|min:0',
-            'statut' => 'required|in:en_attente,en_transit,livre,retourne',
+            'statut' => 'required|in:emballe,expedie_port,arrive_aeroport_depart,en_vol,arrive_aeroport_transit,arrive_aeroport_destination,en_dedouanement,arrive_entrepot,livre,retourne',
             'date_envoi' => 'required|date',
             'date_livraison_prevue' => 'nullable|date|after_or_equal:date_envoi',
             'agence_depart_id' => 'required|exists:agences,id',
@@ -261,10 +265,18 @@ class ColiController extends Controller
             'caisse_id' => 'nullable|exists:caisses,id',
             'montant_paye' => 'nullable|numeric|min:0.01',
             'mode_paiement' => 'nullable|in:espece,carte,virement,cheque,mobile_money',
+            'description_etape' => 'nullable|string|max:1000',
+            'localisation_etape' => 'nullable|string|max:255',
         ]);
 
         // Enregistrer l'historique si le statut change
         $statutAvant = $coli->statut;
+        $descriptionEtape = $request->input('description_etape');
+        $localisationEtape = $request->input('localisation_etape');
+        
+        // Retirer les champs d'historique de validated avant de mettre à jour
+        unset($validated['description_etape'], $validated['localisation_etape']);
+        
         $coli->update($validated);
         
         // Si le statut a changé, enregistrer dans l'historique
@@ -274,8 +286,8 @@ class ColiController extends Controller
                 'statut_avant' => $statutAvant,
                 'statut_apres' => $coli->statut,
                 'user_id' => auth()->id(),
-                'commentaire' => 'Statut modifié',
-                'localisation' => $coli->agenceArrivee->nom_agence ?? $coli->agenceDepart->nom_agence ?? null,
+                'commentaire' => $descriptionEtape ?: 'Statut modifié',
+                'localisation' => $localisationEtape ?: ($coli->agenceArrivee->nom_agence ?? $coli->agenceDepart->nom_agence ?? null),
             ]);
         }
         

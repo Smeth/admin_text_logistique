@@ -47,6 +47,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/colis/{coli}/edit', [ColiController::class, 'edit'])->name('colis.edit');
         Route::put('/colis/{coli}', [ColiController::class, 'update'])->name('colis.update');
         Route::delete('/colis/{coli}', [ColiController::class, 'destroy'])->name('colis.destroy');
+        Route::post('/colis/{coli}/add-step', [ColiController::class, 'addStep'])->name('colis.add-step');
     });
     
     // Factures et reçus

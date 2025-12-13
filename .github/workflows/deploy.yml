@@ -54,10 +54,10 @@ jobs:
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         script: |
           # 1. Aller au répertoire du projet
-          cd /var/www/monprojetlaravel
+          cd /var/www/livrango/admin
 
           # 2. Pull le dernier code
-          git pull origin main
+          git pull origin master
 
           # 3. Mettre à jour les dépendances Laravel (si vous l'avez fait sur GitHub)
           composer install --no-dev --prefer-dist

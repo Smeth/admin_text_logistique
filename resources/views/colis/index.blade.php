@@ -38,6 +38,7 @@
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Numéro</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Client</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Statut</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Paiement</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Date envoi</th>
                         <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Actions</th>
                     </tr>
@@ -57,6 +58,17 @@
                                     {{ ucfirst(str_replace('_', ' ', $coli->statut)) }}
                                 </span>
                             </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                @if($coli->statut_paiement === 'paye')
+                                    <span class="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Payé</span>
+                                @elseif($coli->statut_paiement === 'partiel')
+                                    <span class="px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
+                                        Partiel ({{ number_format($coli->total_paye, 0, ',', ' ') }}/{{ number_format($coli->frais_transport, 0, ',', ' ') }})
+                                    </span>
+                                @else
+                                    <span class="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">Non payé</span>
+                                @endif
+                            </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{{ $coli->date_envoi->format('d/m/Y') }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 <div class="flex justify-end space-x-2">
@@ -72,7 +84,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="px-6 py-4 text-center text-gray-500 dark:text-gray-400">Aucun colis trouvé</td></tr>
+                        <tr><td colspan="6" class="px-6 py-4 text-center text-gray-500 dark:text-gray-400">Aucun colis trouvé</td></tr>
                     @endforelse
                 </tbody>
             </table>

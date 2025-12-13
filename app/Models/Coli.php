@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Coli extends Model
 {
@@ -67,6 +68,16 @@ class Coli extends Model
         return $this->belongsTo(Tarif::class);
     }
 
+    public function paiements(): HasMany
+    {
+        return $this->hasMany(Paiement::class);
+    }
+
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class);
+    }
+
     public function isLivre(): bool
     {
         return $this->statut === 'livre';
@@ -90,5 +101,54 @@ class Coli extends Model
                 $this->frais_transport = $this->frais_calcule;
             }
         }
+    }
+
+    /**
+     * Calculer le montant total payé
+     */
+    public function getTotalPayeAttribute()
+    {
+        return $this->paiements()->sum('montant');
+    }
+
+    /**
+     * Calculer le montant restant à payer
+     */
+    public function getMontantRestantAttribute()
+    {
+        return max(0, $this->frais_transport - $this->total_paye);
+    }
+
+    /**
+     * Obtenir le statut de paiement
+     */
+    public function getStatutPaiementAttribute()
+    {
+        $totalPaye = $this->total_paye;
+        
+        if ($totalPaye == 0) {
+            return 'non_paye';
+        } elseif ($totalPaye >= $this->frais_transport) {
+            return 'paye';
+        } else {
+            return 'partiel';
+        }
+    }
+
+    /**
+     * Vérifier si le colis est totalement payé
+     */
+    public function estTotalementPaye(): bool
+    {
+        return $this->total_paye >= $this->frais_transport;
+    }
+
+    /**
+     * Vérifier si le colis est partiellement payé
+     */
+    public function estPartiellementPaye(): bool
+    {
+        $totalPaye = $this->total_paye;
+        return $totalPaye > 0 && $totalPaye < $this->frais_transport;
     }
 }

@@ -2,12 +2,14 @@
 
 use App\Http\Controllers\AgenceController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\CaisseController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ColiController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeviseController;
 use App\Http\Controllers\EntrepriseTransporteurController;
 use App\Http\Controllers\TarifController;
+use App\Http\Controllers\TransactionController;
 use Illuminate\Support\Facades\Route;
 
 // Routes publiques
@@ -58,5 +60,13 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:admin')->group(function () {
         Route::resource('devises', DeviseController::class);
         Route::resource('tarifs', TarifController::class);
+    });
+
+    // Gestion de caisse (Admin uniquement)
+    Route::middleware('role:admin')->group(function () {
+        Route::resource('caisses', CaisseController::class)->parameters(['caisses' => 'caisse']);
+        Route::post('/caisses/{caisse}/ouvrir', [CaisseController::class, 'ouvrir'])->name('caisses.ouvrir');
+        Route::post('/caisses/{caisse}/fermer', [CaisseController::class, 'fermer'])->name('caisses.fermer');
+        Route::resource('transactions', TransactionController::class)->except(['edit', 'update']);
     });
 });

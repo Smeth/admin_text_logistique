@@ -42,12 +42,90 @@
                 </p>
             </div>
             <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Date Envoi</p><p class="text-lg text-gray-900 dark:text-white mt-1">{{ $coli->date_envoi->format('d/m/Y') }}</p></div>
-            <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Payé</p><p class="text-lg text-gray-900 dark:text-white mt-1">{{ $coli->paye ? 'Oui' : 'Non' }}</p></div>
+            <div>
+                <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Statut Paiement</p>
+                <div class="mt-1">
+                    @if($coli->statut_paiement === 'paye')
+                        <span class="inline-block px-3 py-1 text-sm font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Payé</span>
+                    @elseif($coli->statut_paiement === 'partiel')
+                        <span class="inline-block px-3 py-1 text-sm font-medium rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">Partiellement payé</span>
+                    @else
+                        <span class="inline-block px-3 py-1 text-sm font-medium rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">Non payé</span>
+                    @endif
+                </div>
+            </div>
         </div>
+
+        <!-- Informations de paiement -->
+        <div class="mt-6 border-t border-gray-200 dark:border-slate-700 pt-6">
+            <h4 class="text-md font-semibold text-gray-900 dark:text-white mb-4">Informations de Paiement</h4>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-gray-50 dark:bg-slate-700/50 rounded-lg p-4">
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Montant Total</p>
+                    <p class="text-xl font-bold text-gray-900 dark:text-white mt-1">{{ number_format($coli->frais_transport, 0, ',', ' ') }} {{ $coli->devise ? $coli->devise->symbole : 'FCFA' }}</p>
+                </div>
+                <div class="bg-gray-50 dark:bg-slate-700/50 rounded-lg p-4">
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Payé</p>
+                    <p class="text-xl font-bold text-green-600 dark:text-green-400 mt-1">{{ number_format($coli->total_paye, 0, ',', ' ') }} {{ $coli->devise ? $coli->devise->symbole : 'FCFA' }}</p>
+                </div>
+                <div class="bg-gray-50 dark:bg-slate-700/50 rounded-lg p-4">
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Reste à Payer</p>
+                    <p class="text-xl font-bold {{ $coli->montant_restant > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400' }} mt-1">
+                        {{ number_format($coli->montant_restant, 0, ',', ' ') }} {{ $coli->devise ? $coli->devise->symbole : 'FCFA' }}
+                    </p>
+                </div>
+            </div>
+        </div>
+
         @if($coli->description_contenu)
         <div class="mt-6"><p class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Description</p><p class="text-gray-900 dark:text-white">{{ $coli->description_contenu }}</p></div>
         @endif
     </div>
+
+    <!-- Historique des paiements -->
+    @if($coli->paiements->count() > 0)
+    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700">
+        <div class="p-6 border-b border-gray-200 dark:border-slate-700">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Historique des Paiements</h3>
+        </div>
+        <div class="p-6">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
+                    <thead class="bg-gray-50 dark:bg-slate-700">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Date</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Montant</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Mode</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Caisse</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Utilisateur</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
+                        @foreach($coli->paiements as $paiement)
+                            <tr class="hover:bg-gray-50 dark:hover:bg-slate-700/50">
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                    {{ $paiement->date_paiement->format('d/m/Y') }}
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-white">
+                                    {{ number_format($paiement->montant, 0, ',', ' ') }} {{ $paiement->devise ? $paiement->devise->symbole : 'FCFA' }}
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                    {{ ucfirst(str_replace('_', ' ', $paiement->mode_paiement)) }}
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                    {{ $paiement->caisse ? $paiement->caisse->nom_caisse : '-' }}
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                    {{ $paiement->user->name }}
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    @endif
 </div>
 @endsection
 

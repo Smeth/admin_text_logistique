@@ -70,8 +70,30 @@
         </div>
     </div>
 
-    <!-- Statistiques supplémentaires -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <!-- Statistiques financières -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-slate-700">
+            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Revenus du Jour</p>
+            <p class="text-2xl font-bold text-green-600 dark:text-green-400 mt-2">{{ number_format($revenusJour, 0, ',', ' ') }} FCFA</p>
+        </div>
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-slate-700">
+            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Revenus Semaine</p>
+            <p class="text-2xl font-bold text-green-600 dark:text-green-400 mt-2">{{ number_format($revenusSemaine, 0, ',', ' ') }} FCFA</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">7 derniers jours</p>
+        </div>
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-slate-700">
+            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Revenus du Mois</p>
+            <p class="text-2xl font-bold text-green-600 dark:text-green-400 mt-2">{{ number_format($revenusMois, 0, ',', ' ') }} FCFA</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Mois en cours</p>
+        </div>
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-slate-700">
+            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Dépenses du Jour</p>
+            <p class="text-2xl font-bold text-red-600 dark:text-red-400 mt-2">{{ number_format($depensesJour, 0, ',', ' ') }} FCFA</p>
+        </div>
+    </div>
+
+    <!-- Statistiques opérationnelles et caisses -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-slate-700">
             <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Total Colis</p>
             <p class="text-2xl font-bold text-gray-900 dark:text-white mt-2">{{ $totalColis }}</p>
@@ -81,9 +103,40 @@
             <p class="text-2xl font-bold text-orange-600 dark:text-orange-400 mt-2">{{ $colisEnTransit }}</p>
         </div>
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-slate-700">
-            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Revenus du Jour</p>
-            <p class="text-2xl font-bold text-green-600 dark:text-green-400 mt-2">{{ number_format($revenusJour, 0, ',', ' ') }} FCFA</p>
+            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Caisses Ouvertes</p>
+            <p class="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-2">{{ $caissesOuvertes }}</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Solde: {{ number_format($soldeTotalCaisses, 0, ',', ' ') }} FCFA</p>
         </div>
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-slate-700">
+            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Colis Non Payés</p>
+            <p class="text-2xl font-bold text-yellow-600 dark:text-yellow-400 mt-2">{{ $colisNonPayes }}</p>
+        </div>
+    </div>
+
+    <!-- Alertes -->
+    @if($colisEnRetard > 0)
+    <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center">
+                <svg class="w-6 h-6 text-red-600 dark:text-red-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+                <div>
+                    <h3 class="text-lg font-semibold text-red-800 dark:text-red-300">⚠️ Colis en Retard</h3>
+                    <p class="text-sm text-red-600 dark:text-red-400 mt-1">{{ $colisEnRetard }} colis ont dépassé leur date de livraison prévue</p>
+                </div>
+            </div>
+            <a href="{{ route('colis.index', ['statut' => 'en_retard']) }}" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium">
+                Voir les colis en retard
+            </a>
+        </div>
+    </div>
+    @endif
+
+    <!-- Graphique des revenus -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 p-6">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Évolution des Revenus (7 derniers jours)</h3>
+        <canvas id="revenusChart" height="80"></canvas>
     </div>
 
     <!-- Derniers clients et colis -->
@@ -155,6 +208,94 @@
             </div>
         </div>
     </div>
+
+    <!-- Colis en retard (détails) -->
+    @if($colisEnRetardListe->count() > 0)
+    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700">
+        <div class="p-6 border-b border-gray-200 dark:border-slate-700">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Colis en Retard</h3>
+        </div>
+        <div class="p-6">
+            <div class="space-y-4">
+                @foreach($colisEnRetardListe as $coli)
+                    <div class="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                        <div>
+                            <p class="font-medium text-gray-900 dark:text-white">{{ $coli->numero_suivi }}</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">{{ $coli->client->full_name }}</p>
+                            <p class="text-xs text-red-600 dark:text-red-400 mt-1">
+                                Date prévue: {{ $coli->date_livraison_prevue ? $coli->date_livraison_prevue->format('d/m/Y') : '-' }}
+                                ({{ $coli->date_livraison_prevue ? $coli->date_livraison_prevue->diffForHumans() : '' }})
+                            </p>
+                        </div>
+                        <span class="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                            En retard
+                        </span>
+                    </div>
+                @endforeach
+            </div>
+            @if($colisEnRetard > 5)
+            <div class="mt-4">
+                <a href="{{ route('colis.index') }}" class="text-indigo-600 dark:text-indigo-400 hover:underline text-sm font-medium">
+                    Voir tous les colis en retard ({{ $colisEnRetard }}) →
+                </a>
+            </div>
+            @endif
+        </div>
+    </div>
+    @endif
 </div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('revenusChart');
+    if (ctx) {
+        const revenusData = @json($revenusParJour);
+        
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: revenusData.map(item => item.date),
+                datasets: [{
+                    label: 'Revenus (FCFA)',
+                    data: revenusData.map(item => item.montant),
+                    borderColor: 'rgb(99, 102, 241)',
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return 'Revenus: ' + new Intl.NumberFormat('fr-FR').format(context.parsed.y) + ' FCFA';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return new Intl.NumberFormat('fr-FR').format(value) + ' FCFA';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+});
+</script>
 @endsection
 

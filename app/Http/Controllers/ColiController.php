@@ -3,18 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Models\Agence;
+use App\Models\Caisse;
 use App\Models\Client;
 use App\Models\Coli;
 use App\Models\Devise;
 use App\Models\EntrepriseTransporteur;
+use App\Models\Paiement;
 use App\Models\Tarif;
+use App\Models\Transaction;
 use Illuminate\Http\Request;
 
 class ColiController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Coli::with(['client', 'agenceDepart', 'agenceArrivee', 'transporteur', 'devise', 'tarif']);
+        $query = Coli::with(['client', 'agenceDepart', 'agenceArrivee', 'transporteur', 'devise', 'tarif', 'paiements']);
 
         if ($request->has('search') && $request->search) {
             $search = $request->search;
@@ -42,8 +45,9 @@ class ColiController extends Controller
         $transporteurs = EntrepriseTransporteur::where('statut', 'actif')->orderBy('nom_entreprise')->get();
         $devises = Devise::where('actif', true)->orderBy('est_principale', 'desc')->orderBy('nom')->get();
         $tarifs = Tarif::where('actif', true)->orderBy('nom_tarif')->get();
+        $caisses = Caisse::where('statut', 'ouverte')->orderBy('nom_caisse')->get();
         
-        return view('colis.create', compact('clients', 'agences', 'transporteurs', 'devises', 'tarifs'));
+        return view('colis.create', compact('clients', 'agences', 'transporteurs', 'devises', 'tarifs', 'caisses'));
     }
 
     public function store(Request $request)
@@ -65,8 +69,21 @@ class ColiController extends Controller
             'tarif_id' => 'nullable|exists:tarifs,id',
             'frais_transport' => 'required|numeric|min:0',
             'frais_calcule' => 'nullable|numeric|min:0',
-            'paye' => 'boolean',
+            'paiement_complet' => 'boolean',
+            'paiement_partiel' => 'boolean',
+            'caisse_id' => 'nullable|required_with:paiement_complet,paiement_partiel|exists:caisses,id',
+            'montant_paye' => 'nullable|required_with:paiement_partiel|numeric|min:0.01',
+            'mode_paiement' => 'nullable|in:espece,carte,virement,cheque,mobile_money',
         ]);
+
+        // Retirer les champs de paiement de validated avant de créer le colis
+        $paiementComplet = $request->has('paiement_complet') && $request->paiement_complet;
+        $paiementPartiel = $request->has('paiement_partiel') && $request->paiement_partiel;
+        $caisseId = $request->input('caisse_id');
+        $montantPaye = $request->input('montant_paye');
+        $modePaiement = $request->input('mode_paiement', 'espece');
+
+        unset($validated['paiement_complet'], $validated['paiement_partiel'], $validated['caisse_id'], $validated['montant_paye'], $validated['mode_paiement']);
 
         $coli = Coli::create($validated);
         
@@ -88,25 +105,84 @@ class ColiController extends Controller
             }
         }
 
+        // Gérer le paiement si demandé
+        if (($paiementComplet || $paiementPartiel) && $caisseId) {
+            $caisse = Caisse::findOrFail($caisseId);
+            
+            // Vérifier que la caisse est ouverte
+            if (!$caisse->isOuverte()) {
+                return back()->withInput()
+                    ->with('error', 'Impossible d\'enregistrer le paiement sur une caisse fermée.');
+            }
+
+            // Déterminer le montant à payer
+            if ($paiementComplet) {
+                $montantPaye = $coli->frais_transport;
+            } else {
+                // Vérifier que le montant ne dépasse pas le total
+                if ($montantPaye > $coli->frais_transport) {
+                    return back()->withInput()
+                        ->with('error', 'Le montant payé ne peut pas dépasser le montant total du colis.');
+                }
+            }
+
+            // Créer la transaction d'entrée
+            $transaction = Transaction::create([
+                'caisse_id' => $caisseId,
+                'type' => 'entree',
+                'libelle' => 'Paiement colis ' . $coli->numero_suivi . ($paiementPartiel ? ' (Acompte)' : ''),
+                'montant' => $montantPaye,
+                'devise_id' => $coli->devise_id,
+                'coli_id' => $coli->id,
+                'client_id' => $coli->client_id,
+                'user_id' => auth()->id(),
+                'date_transaction' => now(),
+                'description' => ($paiementPartiel ? 'Acompte de ' : 'Paiement de ') . number_format($montantPaye, 0, ',', ' ') . ' FCFA pour le colis ' . $coli->numero_suivi . ' - Client: ' . $coli->client->full_name,
+            ]);
+
+            // Créer le paiement
+            $paiement = Paiement::create([
+                'coli_id' => $coli->id,
+                'caisse_id' => $caisseId,
+                'transaction_id' => $transaction->id,
+                'montant' => $montantPaye,
+                'devise_id' => $coli->devise_id,
+                'mode_paiement' => $modePaiement,
+                'date_paiement' => now(),
+                'user_id' => auth()->id(),
+                'notes' => $paiementPartiel ? 'Acompte' : 'Paiement complet',
+            ]);
+
+            // Mettre à jour le solde de la caisse
+            $caisse->mettreAJourSolde();
+
+            // Mettre à jour le statut paye du colis (true si totalement payé)
+            if ($coli->estTotalementPaye()) {
+                $coli->update(['paye' => true]);
+            }
+        }
+
         return redirect()->route('colis.index')
             ->with('success', 'Colis créé avec succès.');
     }
 
     public function show(Coli $coli)
     {
-        $coli->load(['client', 'agenceDepart', 'agenceArrivee', 'transporteur', 'devise', 'tarif']);
+        $coli->load(['client', 'agenceDepart', 'agenceArrivee', 'transporteur', 'devise', 'tarif', 'paiements.caisse', 'paiements.user']);
         return view('colis.show', compact('coli'));
     }
 
     public function edit(Coli $coli)
     {
+        $coli->load(['client', 'agenceDepart', 'agenceArrivee', 'transporteur', 'devise', 'tarif', 'paiements']);
         $clients = Client::where('statut', 'actif')->orderBy('nom')->get();
         $agences = Agence::orderBy('nom_agence')->get();
         $transporteurs = EntrepriseTransporteur::where('statut', 'actif')->orderBy('nom_entreprise')->get();
         $devises = Devise::where('actif', true)->orderBy('est_principale', 'desc')->orderBy('nom')->get();
         $tarifs = Tarif::where('actif', true)->orderBy('nom_tarif')->get();
+        $caisses = Caisse::where('statut', 'ouverte')->orderBy('nom_caisse')->get();
         
-        return view('colis.edit', compact('coli', 'clients', 'agences', 'transporteurs', 'devises', 'tarifs'));
+        return view('colis.edit', compact('coli', 'clients', 'agences', 'transporteurs', 'devises', 'tarifs', 'caisses'));
     }
 
     public function update(Request $request, Coli $coli)
@@ -128,7 +204,9 @@ class ColiController extends Controller
             'tarif_id' => 'nullable|exists:tarifs,id',
             'frais_transport' => 'required|numeric|min:0',
             'frais_calcule' => 'nullable|numeric|min:0',
-            'paye' => 'boolean',
+            'caisse_id' => 'nullable|exists:caisses,id',
+            'montant_paye' => 'nullable|numeric|min:0.01',
+            'mode_paiement' => 'nullable|in:espece,carte,virement,cheque,mobile_money',
         ]);
 
         $coli->update($validated);
@@ -145,6 +223,63 @@ class ColiController extends Controller
             if ($prixCalcule) {
                 $coli->update(['frais_calcule' => $prixCalcule]);
             }
+        }
+
+        // Gérer l'ajout d'un acompte supplémentaire
+        if ($request->has('caisse_id') && $request->has('montant_paye') && $request->montant_paye > 0) {
+            $caisse = Caisse::findOrFail($request->caisse_id);
+            
+            // Vérifier que la caisse est ouverte
+            if (!$caisse->isOuverte()) {
+                return back()->withInput()
+                    ->with('error', 'Impossible d\'enregistrer le paiement sur une caisse fermée.');
+            }
+
+            // Vérifier que le montant ne dépasse pas le reste à payer
+            $montantRestant = $coli->montant_restant;
+            if ($request->montant_paye > $montantRestant) {
+                return back()->withInput()
+                    ->with('error', 'Le montant payé ne peut pas dépasser le montant restant à payer (' . number_format($montantRestant, 0, ',', ' ') . ' FCFA).');
+            }
+
+            // Créer la transaction d'entrée
+            $transaction = Transaction::create([
+                'caisse_id' => $request->caisse_id,
+                'type' => 'entree',
+                'libelle' => 'Acompte colis ' . $coli->numero_suivi,
+                'montant' => $request->montant_paye,
+                'devise_id' => $coli->devise_id,
+                'coli_id' => $coli->id,
+                'client_id' => $coli->client_id,
+                'user_id' => auth()->id(),
+                'date_transaction' => now(),
+                'description' => 'Acompte de ' . number_format($request->montant_paye, 0, ',', ' ') . ' FCFA pour le colis ' . $coli->numero_suivi . ' - Client: ' . $coli->client->full_name,
+            ]);
+
+            // Créer le paiement
+            $paiement = Paiement::create([
+                'coli_id' => $coli->id,
+                'caisse_id' => $request->caisse_id,
+                'transaction_id' => $transaction->id,
+                'montant' => $request->montant_paye,
+                'devise_id' => $coli->devise_id,
+                'mode_paiement' => $request->input('mode_paiement', 'espece'),
+                'date_paiement' => now(),
+                'user_id' => auth()->id(),
+                'notes' => 'Acompte supplémentaire',
+            ]);
+
+            // Mettre à jour le solde de la caisse
+            $caisse->mettreAJourSolde();
+
+            // Mettre à jour le statut paye du colis
+            $coli->refresh();
+            if ($coli->estTotalementPaye()) {
+                $coli->update(['paye' => true]);
+            }
+
+            return redirect()->route('colis.edit', $coli)
+                ->with('success', 'Acompte enregistré avec succès. Reste à payer: ' . number_format($coli->montant_restant, 0, ',', ' ') . ' FCFA');
         }
 
         return redirect()->route('colis.index')

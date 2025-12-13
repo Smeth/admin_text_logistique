@@ -54,6 +54,20 @@
                     @error('agence_arrivee_id')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                 </div>
                 <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Pays d'origine</label>
+                    <input type="text" name="pays_origine" value="{{ old('pays_origine') }}" 
+                           placeholder="Ex: Cameroun, Sénégal..."
+                           class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
+                    @error('pays_origine')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Ville d'origine</label>
+                    <input type="text" name="ville_origine" value="{{ old('ville_origine') }}" 
+                           placeholder="Ex: Douala, Dakar..."
+                           class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
+                    @error('ville_origine')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
+                </div>
+                <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Transporteur</label>
                     <select name="transporteur_id" class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
                         <option value="">Aucun</option>
@@ -84,8 +98,12 @@
                     <select name="devise_id" id="devise_id" class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
                         <option value="">Sélectionner une devise</option>
                         @foreach($devises as $devise)
-                            <option value="{{ $devise->id }}" {{ old('devise_id', $devises->firstWhere('est_principale', true)?->id) == $devise->id ? 'selected' : '' }} data-symbole="{{ $devise->symbole }}">
-                                {{ $devise->nom }} ({{ $devise->symbole }})
+                            @php
+                                $devisePrincipale = $devises->firstWhere('est_principale', true);
+                                $deviseParDefaut = $devisePrincipale ?? $devises->first();
+                            @endphp
+                            <option value="{{ $devise->id }}" {{ old('devise_id', $deviseParDefaut?->id) == $devise->id ? 'selected' : '' }} data-symbole="{{ $devise->symbole }}">
+                                {{ $devise->nom }} ({{ $devise->symbole }})@if($devise->est_principale) - Principale @endif
                             </option>
                         @endforeach
                     </select>
@@ -122,7 +140,7 @@
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Paiement</h3>
                 
                 <div class="space-y-4">
-                    <div class="flex items-center space-x-6">
+                    <div class="flex items-center gap-6">
                         <div class="flex items-center">
                             <input type="checkbox" name="paiement_complet" id="paiement_complet" value="1" {{ old('paiement_complet') ? 'checked' : '' }} class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
                             <label for="paiement_complet" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">Paiement complet</label>

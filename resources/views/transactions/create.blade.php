@@ -86,7 +86,11 @@
                             class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-slate-700 dark:text-white">
                         <option value="">Sélectionner une devise</option>
                         @foreach($devises as $devise)
-                            <option value="{{ $devise->id }}" {{ old('devise_id', $devises->firstWhere('est_principale', true)?->id) == $devise->id ? 'selected' : '' }}>{{ $devise->nom }} ({{ $devise->symbole }})</option>
+                            @php
+                                $devisePrincipale = $devises->firstWhere('est_principale', true);
+                                $deviseParDefaut = $devisePrincipale ?? $devises->first();
+                            @endphp
+                            <option value="{{ $devise->id }}" {{ old('devise_id', $deviseParDefaut?->id) == $devise->id ? 'selected' : '' }}>{{ $devise->nom }} ({{ $devise->symbole }})@if($devise->est_principale) - Principale @endif</option>
                         @endforeach
                     </select>
                     @error('devise_id')

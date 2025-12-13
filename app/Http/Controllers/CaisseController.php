@@ -16,6 +16,12 @@ class CaisseController extends Controller
     {
         $query = Caisse::with(['agence', 'responsable']);
 
+        // Filtrage par agence pour responsable d'agence
+        $user = auth()->user();
+        if ($user->isResponsableAgence() && $user->agence_id) {
+            $query->pourAgence($user->agence_id);
+        }
+
         // Recherche
         if ($request->has('search') && $request->search) {
             $search = $request->search;
@@ -27,7 +33,7 @@ class CaisseController extends Controller
             $query->where('statut', $request->statut);
         }
 
-        // Filtre par agence
+        // Filtre par agence (pour admin/superviseur)
         if ($request->has('agence_id') && $request->agence_id) {
             $query->where('agence_id', $request->agence_id);
         }
@@ -43,9 +49,17 @@ class CaisseController extends Controller
      */
     public function create()
     {
+        $user = auth()->user();
+        
+        // Filtrer les agences pour responsable d'agence
         $agences = Agence::all();
+        if ($user->isResponsableAgence() && $user->agence_id) {
+            $agences = Agence::where('id', $user->agence_id)->get();
+        }
+        
         $users = User::all();
-        return view('caisses.create', compact('agences', 'users'));
+        $devises = \App\Models\Devise::where('actif', true)->orderBy('est_principale', 'desc')->orderBy('nom')->get();
+        return view('caisses.create', compact('agences', 'users', 'devises'));
     }
 
     /**
@@ -57,6 +71,7 @@ class CaisseController extends Controller
             'nom_caisse' => 'required|string|max:255',
             'agence_id' => 'nullable|exists:agences,id',
             'responsable_id' => 'nullable|exists:users,id',
+            'devise_id' => 'nullable|exists:devises,id',
             'solde_initial' => 'required|numeric|min:0',
             'statut' => 'required|in:ouverte,fermee',
             'notes' => 'nullable|string',
@@ -125,6 +140,7 @@ class CaisseController extends Controller
             'nom_caisse' => 'required|string|max:255',
             'agence_id' => 'nullable|exists:agences,id',
             'responsable_id' => 'nullable|exists:users,id',
+            'devise_id' => 'nullable|exists:devises,id',
             'solde_initial' => 'required|numeric|min:0',
             'statut' => 'required|in:ouverte,fermee',
             'notes' => 'nullable|string',

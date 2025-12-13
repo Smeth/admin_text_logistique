@@ -46,6 +46,20 @@
                     </select>
                 </div>
                 <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Pays d'origine</label>
+                    <input type="text" name="pays_origine" value="{{ old('pays_origine', $coli->pays_origine) }}" 
+                           placeholder="Ex: Cameroun, Sénégal..."
+                           class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
+                    @error('pays_origine')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Ville d'origine</label>
+                    <input type="text" name="ville_origine" value="{{ old('ville_origine', $coli->ville_origine) }}" 
+                           placeholder="Ex: Douala, Dakar..."
+                           class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
+                    @error('ville_origine')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
+                </div>
+                <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Transporteur</label>
                     <select name="transporteur_id" class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
                         <option value="">Aucun</option>
@@ -77,7 +91,7 @@
                         <option value="">Sélectionner une devise</option>
                         @foreach($devises as $devise)
                             <option value="{{ $devise->id }}" {{ old('devise_id', $coli->devise_id) == $devise->id ? 'selected' : '' }} data-symbole="{{ $devise->symbole }}">
-                                {{ $devise->nom }} ({{ $devise->symbole }})
+                                {{ $devise->nom }} ({{ $devise->symbole }})@if($devise->est_principale) - Principale @endif
                             </option>
                         @endforeach
                     </select>

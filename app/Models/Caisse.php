@@ -12,6 +12,7 @@ class Caisse extends Model
         'nom_caisse',
         'agence_id',
         'responsable_id',
+        'devise_id',
         'solde_initial',
         'solde_actuel',
         'statut',
@@ -35,6 +36,11 @@ class Caisse extends Model
     public function responsable(): BelongsTo
     {
         return $this->belongsTo(User::class, 'responsable_id');
+    }
+
+    public function devise(): BelongsTo
+    {
+        return $this->belongsTo(Devise::class);
     }
 
     public function transactions(): HasMany
@@ -97,6 +103,14 @@ class Caisse extends Model
     public function isOuverte(): bool
     {
         return $this->statut === 'ouverte';
+    }
+
+    /**
+     * Scope pour filtrer les caisses par agence
+     */
+    public function scopePourAgence($query, $agenceId)
+    {
+        return $query->where('agence_id', $agenceId);
     }
 }
 

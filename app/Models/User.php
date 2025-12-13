@@ -23,6 +23,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role_id',
+        'agence_id',
     ];
 
     /**
@@ -53,6 +54,11 @@ class User extends Authenticatable
         return $this->belongsTo(Role::class);
     }
 
+    public function agence(): BelongsTo
+    {
+        return $this->belongsTo(Agence::class);
+    }
+
     public function isAdmin(): bool
     {
         return $this->role?->name === 'admin';
@@ -61,5 +67,35 @@ class User extends Authenticatable
     public function isAgent(): bool
     {
         return $this->role?->name === 'agent';
+    }
+
+    public function isResponsableAgence(): bool
+    {
+        return $this->role?->name === 'responsable_agence';
+    }
+
+    public function isSuperviseur(): bool
+    {
+        return $this->role?->name === 'superviseur';
+    }
+
+    /**
+     * Vérifier si l'utilisateur peut accéder à une agence
+     */
+    public function peutAccederAgence(?int $agenceId): bool
+    {
+        if ($this->isAdmin()) {
+            return true; // Admin accède à tout
+        }
+        
+        if ($this->isSuperviseur()) {
+            return true; // Superviseur voit tout
+        }
+        
+        if ($this->isResponsableAgence()) {
+            return $this->agence_id === $agenceId;
+        }
+        
+        return false;
     }
 }

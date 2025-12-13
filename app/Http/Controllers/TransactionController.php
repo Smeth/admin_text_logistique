@@ -18,6 +18,12 @@ class TransactionController extends Controller
     {
         $query = Transaction::with(['caisse', 'user', 'coli', 'client', 'devise']);
 
+        // Filtrage par agence pour responsable d'agence
+        $user = auth()->user();
+        if ($user->isResponsableAgence() && $user->agence_id) {
+            $query->pourAgence($user->agence_id);
+        }
+
         // Filtre par caisse
         if ($request->has('caisse_id') && $request->caisse_id) {
             $query->where('caisse_id', $request->caisse_id);
@@ -58,7 +64,16 @@ class TransactionController extends Controller
      */
     public function create()
     {
+        $user = auth()->user();
+        
+        // Filtrer les caisses pour responsable d'agence
         $caisses = Caisse::where('statut', 'ouverte')->get();
+        if ($user->isResponsableAgence() && $user->agence_id) {
+            $caisses = Caisse::where('statut', 'ouverte')
+                ->where('agence_id', $user->agence_id)
+                ->get();
+        }
+        
         $colis = Coli::where('paye', false)->get();
         $clients = Client::all();
         $devises = Devise::where('actif', true)->get();

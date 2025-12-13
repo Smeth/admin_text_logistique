@@ -21,6 +21,10 @@
                 @can('admin')
                 <a href="{{ route('colis.edit', $coli) }}" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">Modifier</a>
                 @endcan
+                <a href="{{ route('colis.facture', $coli) }}" target="_blank" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg">Facture</a>
+                @if($coli->paiements->count() > 0)
+                <a href="{{ route('colis.recu', $coli) }}" target="_blank" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg">Reçu</a>
+                @endif
                 <a href="{{ route('colis.index') }}" class="px-4 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700">Retour</a>
             </div>
         </div>
@@ -30,6 +34,20 @@
             <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Poids</p><p class="text-lg text-gray-900 dark:text-white mt-1">{{ $coli->poids }} kg</p></div>
             <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Agence Départ</p><p class="text-lg text-gray-900 dark:text-white mt-1">{{ $coli->agenceDepart->nom_agence }}</p></div>
             <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Agence Arrivée</p><p class="text-lg text-gray-900 dark:text-white mt-1">{{ $coli->agenceArrivee->nom_agence }}</p></div>
+            @if($coli->pays_origine || $coli->ville_origine)
+            <div class="md:col-span-2">
+                <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Lieu d'origine</p>
+                <p class="text-lg text-gray-900 dark:text-white mt-1">
+                    @if($coli->ville_origine && $coli->pays_origine)
+                        {{ $coli->ville_origine }}, {{ $coli->pays_origine }}
+                    @elseif($coli->ville_origine)
+                        {{ $coli->ville_origine }}
+                    @elseif($coli->pays_origine)
+                        {{ $coli->pays_origine }}
+                    @endif
+                </p>
+            </div>
+            @endif
             <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Transporteur</p><p class="text-lg text-gray-900 dark:text-white mt-1">{{ $coli->transporteur ? $coli->transporteur->nom_entreprise : 'Non assigné' }}</p></div>
             <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Devise</p><p class="text-lg text-gray-900 dark:text-white mt-1">{{ $coli->devise ? $coli->devise->nom . ' (' . $coli->devise->symbole . ')' : 'Non définie' }}</p></div>
             <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Tarif</p><p class="text-lg text-gray-900 dark:text-white mt-1">{{ $coli->tarif ? $coli->tarif->nom_tarif : 'Aucun' }}</p></div>
@@ -122,6 +140,54 @@
                         @endforeach
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+    @endif
+
+    <!-- Historique de suivi -->
+    @if($coli->historique->count() > 0)
+    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700">
+        <div class="p-6 border-b border-gray-200 dark:border-slate-700">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Historique de Suivi</h3>
+        </div>
+        <div class="p-6">
+            <div class="space-y-4">
+                @foreach($coli->historique->sortByDesc('created_at') as $historique)
+                    <div class="flex items-start space-x-4 pb-4 border-b border-gray-200 dark:border-slate-700 last:border-0">
+                        <div class="flex-shrink-0">
+                            <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                                <svg class="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between">
+                                <p class="text-sm font-medium text-gray-900 dark:text-white">
+                                    @if($historique->statut_avant)
+                                        Statut changé de <span class="text-orange-600 dark:text-orange-400">{{ ucfirst(str_replace('_', ' ', $historique->statut_avant)) }}</span> 
+                                        vers <span class="text-green-600 dark:text-green-400">{{ ucfirst(str_replace('_', ' ', $historique->statut_apres)) }}</span>
+                                    @else
+                                        Colis créé avec le statut <span class="text-green-600 dark:text-green-400">{{ ucfirst(str_replace('_', ' ', $historique->statut_apres)) }}</span>
+                                    @endif
+                                </p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">{{ $historique->created_at->format('d/m/Y H:i') }}</p>
+                            </div>
+                            @if($historique->localisation)
+                                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                    <span class="font-medium">Localisation:</span> {{ $historique->localisation }}
+                                </p>
+                            @endif
+                            @if($historique->commentaire)
+                                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{{ $historique->commentaire }}</p>
+                            @endif
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Par: {{ $historique->user->name }}
+                            </p>
+                        </div>
+                    </div>
+                @endforeach
             </div>
         </div>
     </div>

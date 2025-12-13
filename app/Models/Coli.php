@@ -20,6 +20,8 @@ class Coli extends Model
         'date_livraison_prevue',
         'agence_depart_id',
         'agence_arrivee_id',
+        'pays_origine',
+        'ville_origine',
         'transporteur_id',
         'frais_transport',
         'devise_id',
@@ -76,6 +78,11 @@ class Coli extends Model
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class);
+    }
+
+    public function historique(): HasMany
+    {
+        return $this->hasMany(ColisHistorique::class, 'coli_id');
     }
 
     public function isLivre(): bool
@@ -150,5 +157,16 @@ class Coli extends Model
     {
         $totalPaye = $this->total_paye;
         return $totalPaye > 0 && $totalPaye < $this->frais_transport;
+    }
+
+    /**
+     * Scope pour filtrer les colis par agence
+     */
+    public function scopePourAgence($query, $agenceId)
+    {
+        return $query->where(function($q) use ($agenceId) {
+            $q->where('agence_depart_id', $agenceId)
+              ->orWhere('agence_arrivee_id', $agenceId);
+        });
     }
 }

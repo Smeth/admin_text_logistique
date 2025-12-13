@@ -29,18 +29,36 @@ class Devise extends Model
 
     /**
      * Obtenir la devise principale
+     * Si aucune devise principale n'existe, retourne la première devise active
      */
     public static function principale()
     {
-        return static::where('est_principale', true)->first();
+        $principale = static::where('est_principale', true)->first();
+        
+        if (!$principale) {
+            // Si aucune devise principale, prendre la première devise active
+            $principale = static::where('actif', true)->orderBy('created_at')->first();
+            
+            // Si une devise est trouvée, la marquer comme principale
+            if ($principale) {
+                $principale->update(['est_principale' => true, 'taux_change' => 1.0000]);
+            }
+        }
+        
+        return $principale;
     }
 
     /**
      * Convertir un montant vers cette devise
      */
-    public function convertir($montant, Devise $fromDevise)
+    public function convertir($montant, ?Devise $fromDevise = null)
     {
-        if ($fromDevise->id === $this->id) {
+        // Si pas de devise source, utiliser la devise principale
+        if (!$fromDevise) {
+            $fromDevise = static::principale();
+        }
+        
+        if (!$fromDevise || $fromDevise->id === $this->id) {
             return $montant;
         }
 
@@ -49,6 +67,14 @@ class Devise extends Model
         
         // Puis vers la devise cible
         return $montantPrincipal * $this->taux_change;
+    }
+
+    /**
+     * Convertir un montant depuis cette devise vers une autre
+     */
+    public function convertirVers(Devise $toDevise, $montant)
+    {
+        return $toDevise->convertir($montant, $this);
     }
 
     /**

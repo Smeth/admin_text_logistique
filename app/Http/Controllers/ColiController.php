@@ -6,6 +6,7 @@ use App\Models\Agence;
 use App\Models\Caisse;
 use App\Models\Client;
 use App\Models\Coli;
+use App\Models\ColisHistorique;
 use App\Models\Devise;
 use App\Models\EntrepriseTransporteur;
 use App\Models\Paiement;
@@ -18,6 +19,12 @@ class ColiController extends Controller
     public function index(Request $request)
     {
         $query = Coli::with(['client', 'agenceDepart', 'agenceArrivee', 'transporteur', 'devise', 'tarif', 'paiements']);
+
+        // Filtrage par agence pour responsable d'agence
+        $user = auth()->user();
+        if ($user->isResponsableAgence() && $user->agence_id) {
+            $query->pourAgence($user->agence_id);
+        }
 
         if ($request->has('search') && $request->search) {
             $search = $request->search;
@@ -40,12 +47,27 @@ class ColiController extends Controller
 
     public function create()
     {
+        $user = auth()->user();
         $clients = Client::where('statut', 'actif')->orderBy('nom')->get();
+        
+        // Filtrer les agences pour responsable d'agence
         $agences = Agence::orderBy('nom_agence')->get();
+        if ($user->isResponsableAgence() && $user->agence_id) {
+            $agences = Agence::where('id', $user->agence_id)->get();
+        }
+        
         $transporteurs = EntrepriseTransporteur::where('statut', 'actif')->orderBy('nom_entreprise')->get();
         $devises = Devise::where('actif', true)->orderBy('est_principale', 'desc')->orderBy('nom')->get();
         $tarifs = Tarif::where('actif', true)->orderBy('nom_tarif')->get();
+        
+        // Filtrer les caisses pour responsable d'agence
         $caisses = Caisse::where('statut', 'ouverte')->orderBy('nom_caisse')->get();
+        if ($user->isResponsableAgence() && $user->agence_id) {
+            $caisses = Caisse::where('statut', 'ouverte')
+                ->where('agence_id', $user->agence_id)
+                ->orderBy('nom_caisse')
+                ->get();
+        }
         
         return view('colis.create', compact('clients', 'agences', 'transporteurs', 'devises', 'tarifs', 'caisses'));
     }
@@ -64,6 +86,8 @@ class ColiController extends Controller
             'date_livraison_prevue' => 'nullable|date|after_or_equal:date_envoi',
             'agence_depart_id' => 'required|exists:agences,id',
             'agence_arrivee_id' => 'required|exists:agences,id',
+            'pays_origine' => 'nullable|string|max:255',
+            'ville_origine' => 'nullable|string|max:255',
             'transporteur_id' => 'nullable|exists:entreprises_transporteurs,id',
             'devise_id' => 'nullable|exists:devises,id',
             'tarif_id' => 'nullable|exists:tarifs,id',
@@ -86,6 +110,16 @@ class ColiController extends Controller
         unset($validated['paiement_complet'], $validated['paiement_partiel'], $validated['caisse_id'], $validated['montant_paye'], $validated['mode_paiement']);
 
         $coli = Coli::create($validated);
+        
+        // Enregistrer l'historique de création
+        ColisHistorique::create([
+            'coli_id' => $coli->id,
+            'statut_avant' => null,
+            'statut_apres' => $coli->statut,
+            'user_id' => auth()->id(),
+            'commentaire' => 'Colis créé',
+            'localisation' => $coli->agenceDepart->nom_agence ?? null,
+        ]);
         
         // Calculer automatiquement le prix si un tarif est sélectionné
         if ($coli->tarif && $coli->poids) {
@@ -126,31 +160,49 @@ class ColiController extends Controller
                 }
             }
 
-            // Créer la transaction d'entrée
+            // Conversion automatique si la devise du colis diffère de celle de la caisse
+            $deviseColis = $coli->devise;
+            $deviseCaisse = $caisse->devise;
+            $montantEnregistre = $montantPaye;
+            $deviseEnregistree = $deviseColis;
+
+            if ($deviseCaisse && $deviseColis && $deviseCaisse->id !== $deviseColis->id) {
+                // Convertir le montant vers la devise de la caisse
+                $montantEnregistre = $deviseColis->convertirVers($deviseCaisse, $montantPaye);
+                $deviseEnregistree = $deviseCaisse;
+            }
+
+            // Créer la transaction d'entrée (enregistrer dans la devise de la caisse)
             $transaction = Transaction::create([
                 'caisse_id' => $caisseId,
                 'type' => 'entree',
                 'libelle' => 'Paiement colis ' . $coli->numero_suivi . ($paiementPartiel ? ' (Acompte)' : ''),
-                'montant' => $montantPaye,
-                'devise_id' => $coli->devise_id,
+                'montant' => $montantEnregistre,
+                'devise_id' => $deviseEnregistree->id,
                 'coli_id' => $coli->id,
                 'client_id' => $coli->client_id,
                 'user_id' => auth()->id(),
                 'date_transaction' => now(),
-                'description' => ($paiementPartiel ? 'Acompte de ' : 'Paiement de ') . number_format($montantPaye, 0, ',', ' ') . ' FCFA pour le colis ' . $coli->numero_suivi . ' - Client: ' . $coli->client->full_name,
+                'description' => ($paiementPartiel ? 'Acompte de ' : 'Paiement de ') . 
+                    number_format($montantPaye, 0, ',', ' ') . ' ' . $deviseColis->symbole . 
+                    ($deviseCaisse && $deviseCaisse->id !== $deviseColis->id ? 
+                        ' (converti: ' . number_format($montantEnregistre, 0, ',', ' ') . ' ' . $deviseCaisse->symbole . ')' : '') . 
+                    ' pour le colis ' . $coli->numero_suivi . ' - Client: ' . $coli->client->full_name,
             ]);
 
-            // Créer le paiement
+            // Créer le paiement (garder la devise originale du colis)
             $paiement = Paiement::create([
                 'coli_id' => $coli->id,
                 'caisse_id' => $caisseId,
                 'transaction_id' => $transaction->id,
-                'montant' => $montantPaye,
-                'devise_id' => $coli->devise_id,
+                'montant' => $montantPaye, // Montant original dans la devise du colis
+                'devise_id' => $deviseColis->id,
                 'mode_paiement' => $modePaiement,
                 'date_paiement' => now(),
                 'user_id' => auth()->id(),
-                'notes' => $paiementPartiel ? 'Acompte' : 'Paiement complet',
+                'notes' => ($paiementPartiel ? 'Acompte' : 'Paiement complet') . 
+                    ($deviseCaisse && $deviseCaisse->id !== $deviseColis->id ? 
+                        ' (converti en ' . $deviseCaisse->symbole . ')' : ''),
             ]);
 
             // Mettre à jour le solde de la caisse
@@ -168,7 +220,7 @@ class ColiController extends Controller
 
     public function show(Coli $coli)
     {
-        $coli->load(['client', 'agenceDepart', 'agenceArrivee', 'transporteur', 'devise', 'tarif', 'paiements.caisse', 'paiements.user']);
+        $coli->load(['client', 'agenceDepart', 'agenceArrivee', 'transporteur', 'devise', 'tarif', 'paiements.caisse', 'paiements.user', 'historique.user']);
         return view('colis.show', compact('coli'));
     }
 
@@ -199,6 +251,8 @@ class ColiController extends Controller
             'date_livraison_prevue' => 'nullable|date|after_or_equal:date_envoi',
             'agence_depart_id' => 'required|exists:agences,id',
             'agence_arrivee_id' => 'required|exists:agences,id',
+            'pays_origine' => 'nullable|string|max:255',
+            'ville_origine' => 'nullable|string|max:255',
             'transporteur_id' => 'nullable|exists:entreprises_transporteurs,id',
             'devise_id' => 'nullable|exists:devises,id',
             'tarif_id' => 'nullable|exists:tarifs,id',
@@ -209,7 +263,21 @@ class ColiController extends Controller
             'mode_paiement' => 'nullable|in:espece,carte,virement,cheque,mobile_money',
         ]);
 
+        // Enregistrer l'historique si le statut change
+        $statutAvant = $coli->statut;
         $coli->update($validated);
+        
+        // Si le statut a changé, enregistrer dans l'historique
+        if ($statutAvant !== $coli->statut) {
+            ColisHistorique::create([
+                'coli_id' => $coli->id,
+                'statut_avant' => $statutAvant,
+                'statut_apres' => $coli->statut,
+                'user_id' => auth()->id(),
+                'commentaire' => 'Statut modifié',
+                'localisation' => $coli->agenceArrivee->nom_agence ?? $coli->agenceDepart->nom_agence ?? null,
+            ]);
+        }
         
         // Recalculer le prix si un tarif est sélectionné
         if ($coli->tarif && $coli->poids) {

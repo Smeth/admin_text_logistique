@@ -65,5 +65,15 @@ class Transaction extends Model
     {
         return $this->type === 'sortie';
     }
+
+    /**
+     * Scope pour filtrer les transactions par agence (via la caisse)
+     */
+    public function scopePourAgence($query, $agenceId)
+    {
+        return $query->whereHas('caisse', function($q) use ($agenceId) {
+            $q->where('agence_id', $agenceId);
+        });
+    }
 }
 

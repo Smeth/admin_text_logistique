@@ -61,8 +61,25 @@
                 </div>
 
                 <div>
+                    <label for="devise_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Devise
+                    </label>
+                    <select id="devise_id" 
+                            name="devise_id" 
+                            class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-slate-700 dark:text-white">
+                        <option value="">Sélectionner une devise</option>
+                        @foreach($devises as $devise)
+                            <option value="{{ $devise->id }}" {{ old('devise_id', $caisse->devise_id) == $devise->id ? 'selected' : '' }}>{{ $devise->nom }} ({{ $devise->symbole }})@if($devise->est_principale) - Principale @endif</option>
+                        @endforeach
+                    </select>
+                    @error('devise_id')
+                        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div>
                     <label for="solde_initial" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Solde initial (FCFA) <span class="text-red-500">*</span>
+                        Solde initial <span class="text-red-500">*</span>
                     </label>
                     <input type="number" 
                            step="0.01" 

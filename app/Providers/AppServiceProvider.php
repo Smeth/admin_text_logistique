@@ -23,5 +23,18 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('admin', function ($user) {
             return $user->isAdmin();
         });
+
+        Gate::define('superviseur', function ($user) {
+            return $user->isSuperviseur();
+        });
+
+        Gate::define('responsable_agence', function ($user) {
+            return $user->isResponsableAgence();
+        });
+
+        // Gate pour vérifier l'accès à une agence
+        Gate::define('access-agence', function ($user, $agence) {
+            return $user->peutAccederAgence($agence->id ?? $agence);
+        });
     }
 }

@@ -14,6 +14,12 @@ class ClientController extends Controller
     {
         $query = Client::query();
 
+        // Filtrage par agence pour responsable d'agence
+        $user = auth()->user();
+        if ($user->isResponsableAgence() && $user->agence_id) {
+            $query->avecColisAgence($user->agence_id);
+        }
+
         // Recherche
         if ($request->has('search') && $request->search) {
             $search = $request->search;

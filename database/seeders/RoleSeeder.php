@@ -23,8 +23,24 @@ class RoleSeeder extends Seeder
         Role::updateOrCreate(
             ['name' => 'agent'],
             [
-                'display_name' => 'Agent',
+                'display_name' => 'Agent de réception',
                 'description' => 'Peut créer des colis et ajouter des clients',
+            ]
+        );
+
+        Role::updateOrCreate(
+            ['name' => 'responsable_agence'],
+            [
+                'display_name' => 'Responsable d\'Agence',
+                'description' => 'Gère uniquement les données de son agence (caisses, transactions, clients, colis)',
+            ]
+        );
+
+        Role::updateOrCreate(
+            ['name' => 'superviseur'],
+            [
+                'display_name' => 'Superviseur',
+                'description' => 'Supervision opérationnelle complète sans gestion financière ni paramètres',
             ]
         );
     }

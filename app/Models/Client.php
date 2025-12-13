@@ -27,4 +27,15 @@ class Client extends Model
     {
         return trim($this->nom . ' ' . $this->prenom);
     }
+
+    /**
+     * Scope pour filtrer les clients ayant des colis liés à une agence
+     */
+    public function scopeAvecColisAgence($query, $agenceId)
+    {
+        return $query->whereHas('colis', function($q) use ($agenceId) {
+            $q->where('agence_depart_id', $agenceId)
+              ->orWhere('agence_arrivee_id', $agenceId);
+        });
+    }
 }

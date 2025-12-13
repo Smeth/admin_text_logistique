@@ -12,8 +12,18 @@ class DeviseSeeder extends Seeder
      */
     public function run(): void
     {
+        // S'assurer qu'il n'y a qu'une seule devise principale avant de commencer
+        $devisesPrincipales = Devise::where('est_principale', true)->get();
+        if ($devisesPrincipales->count() > 1) {
+            // Garder seulement la première comme principale
+            $premiere = $devisesPrincipales->first();
+            Devise::where('est_principale', true)
+                ->where('id', '!=', $premiere->id)
+                ->update(['est_principale' => false]);
+        }
+
         // Créer la devise FCFA comme principale par défaut
-        Devise::updateOrCreate(
+        $fcfa = Devise::updateOrCreate(
             ['code' => 'FCFA'],
             [
                 'nom' => 'Franc CFA',
@@ -23,6 +33,11 @@ class DeviseSeeder extends Seeder
                 'actif' => true,
             ]
         );
+
+        // S'assurer que FCFA est la seule devise principale
+        Devise::where('id', '!=', $fcfa->id)
+            ->where('est_principale', true)
+            ->update(['est_principale' => false]);
 
         // Créer d'autres devises courantes (optionnel)
         Devise::updateOrCreate(

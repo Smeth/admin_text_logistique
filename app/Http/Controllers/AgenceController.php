@@ -10,6 +10,12 @@ class AgenceController extends Controller
     public function index(Request $request)
     {
         $query = Agence::query();
+        
+        // Filtrer les agences pour responsable d'agence
+        $user = auth()->user();
+        if ($user->isResponsableAgence() && $user->agence_id) {
+            $query->where('id', $user->agence_id);
+        }
 
         if ($request->has('search') && $request->search) {
             $search = $request->search;

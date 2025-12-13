@@ -36,7 +36,8 @@ class AuthController extends Controller
 
     public function showRegisterForm()
     {
-        return view('auth.register');
+        $roles = Role::orderBy('display_name')->get();
+        return view('auth.register', compact('roles'));
     }
 
     public function register(Request $request)
@@ -45,15 +46,14 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8|confirmed',
+            'role_id' => 'required|exists:roles,id',
         ]);
 
-        $agentRole = Role::where('name', 'agent')->first();
-        
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'role_id' => $agentRole?->id,
+            'role_id' => $request->role_id,
         ]);
 
         Auth::login($user);

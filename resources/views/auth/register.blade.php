@@ -68,6 +68,26 @@
                            class="w-full px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-slate-700 dark:text-white transition-colors">
                 </div>
 
+                <div>
+                    <label for="role_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Rôle <span class="text-red-500">*</span>
+                    </label>
+                    <select id="role_id" 
+                            name="role_id" 
+                            required
+                            class="w-full px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-slate-700 dark:text-white transition-colors">
+                        <option value="">Sélectionner un rôle</option>
+                        @foreach($roles as $role)
+                            <option value="{{ $role->id }}" {{ old('role_id') == $role->id ? 'selected' : '' }}>
+                                {{ $role->display_name }} - {{ $role->description }}
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('role_id')
+                        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>
+                    @enderror
+                </div>
+
                 <button type="submit" 
                         class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
                     Créer mon compte

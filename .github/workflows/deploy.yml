@@ -6,7 +6,7 @@ name: CI/CD Laravel Deployment
 on:
   push:
     branches:
-      - main
+      - master
 
 jobs:
   # 1. Job de Test & Build (Continious Integration)

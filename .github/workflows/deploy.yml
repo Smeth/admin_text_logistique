@@ -1,4 +1,4 @@
-name: CI/CD Livrango Admin Deployment sur EC2
+name: CI/CD Livrango Admin Deployment complet
 
 on:
   push:
@@ -48,12 +48,27 @@ jobs:
       run: npm run build
 
     # ------------------------------------------
-    # ZIP ARTIFACT
+    # ZIP ARTIFACT (FIXED !!) 🎯
     # ------------------------------------------
     - name: Prepare Deployment Artifact
       run: |
+        rm -rf artifact
         mkdir -p artifact
-        zip -r artifact/build.zip . -x "*.git*" "artifact/*"
+
+        echo "📦 Creating ZIP archive..."
+        zip -yr artifact/build.zip . -x "*.git*" "artifact/*"
+
+    - name: Verify ZIP Integrity
+      run: |
+        echo "📁 Checking ZIP content..."
+        if [ ! -f artifact/build.zip ]; then
+          echo "❌ ERROR: build.zip is NOT a file."
+          ls -l artifact
+          exit 1
+        fi
+        file artifact/build.zip
+        ls -lh artifact/build.zip
+        echo "✅ ZIP validation OK"
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
@@ -73,7 +88,7 @@ jobs:
     steps:
 
     # ------------------------------------------
-    # DOWNLOAD ZIP
+    # DOWNLOAD ZIP FROM BUILD
     # ------------------------------------------
     - name: Download Artifact
       uses: actions/download-artifact@v4
@@ -82,7 +97,7 @@ jobs:
         path: ./artifact
 
     # ------------------------------------------
-    # UPLOAD ZIP TO SERVER (IMPORTANT: FILE PATH)
+    # UPLOAD ZIP TO SERVER (AS FILE!)
     # ------------------------------------------
     - name: Upload Artifact via SCP
       uses: appleboy/scp-action@v0.1.7
@@ -91,11 +106,10 @@ jobs:
         username: ${{ secrets.SSH_USERNAME }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         source: "./artifact/build.zip"
-        target: "/var/www/livrango/admin/tmp/build.zip"  # UPLOAD AS FILE ✔
-
+        target: "/var/www/livrango/admin/tmp/build.zip"
 
     # ------------------------------------------
-    # DEPLOY SCRIPT WITH ROLLBACK
+    # DEPLOYMENT SCRIPT
     # ------------------------------------------
     - name: Deploy via SSH
       uses: appleboy/ssh-action@v1.0.0
@@ -147,14 +161,12 @@ jobs:
           echo "📦 Extracting build.zip..."
           unzip -q "$TMP_DIR/build.zip" -d "$NEW_RELEASE"
 
-
           ####################################
           # LINK SHARED STORAGE
           ####################################
-          echo "🔗 Linking storage folder..."
+          echo "🔗 Linking storage..."
           rm -rf "$NEW_RELEASE/storage"
           ln -s "$PROJECT_DIR/storage" "$NEW_RELEASE/storage"
-
 
           ####################################
           # PERMISSIONS
@@ -163,30 +175,26 @@ jobs:
           sudo chown -R www-data:www-data "$NEW_RELEASE"
           sudo chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache"
 
-
           ####################################
           # UPDATE CURRENT SYMLINK
           ####################################
-          echo "🔄 Switching current -> new release"
+          echo "🔄 Updating current symlink..."
           ln -sfn "$NEW_RELEASE" "$PROJECT_DIR/current"
-
 
           ####################################
           # LARAVEL OPTIMIZATION
           ####################################
-          echo "🚀 Running Laravel optimizations..."
+          echo "⚡ Optimizing Laravel..."
           cd "$PROJECT_DIR/current"
           php artisan optimize:clear || true
           php artisan config:cache || true
           php artisan route:cache || true
-
 
           ####################################
           # CLEAN ZIP
           ####################################
           echo "🧹 Removing ZIP..."
           rm -f "$TMP_DIR/build.zip"
-
 
           echo "=============================="
           echo " 🎉 Deployment SUCCESSFUL !!"

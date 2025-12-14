@@ -78,7 +78,7 @@ jobs:
         name: build
         path: ./artifact
 
-    # Upload ZIP to server
+    # Upload ZIP to server (FIXED HERE)
     - name: Upload Artifact via SCP
       uses: appleboy/scp-action@v0.1.7
       with:
@@ -86,7 +86,7 @@ jobs:
         username: ${{ secrets.SSH_USERNAME }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         source: "./artifact/build.zip"
-        target: "/var/www/livrango/admin/tmp"
+        target: "/var/www/livrango/admin/tmp/build.zip"
 
     # Deploy
     - name: Deploy via SSH

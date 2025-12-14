@@ -15,6 +15,7 @@ use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
+
 // Routes publiques
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
@@ -26,7 +27,7 @@ Route::middleware('guest')->group(function () {
 // Routes protégées
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
-    
+
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/', function () {
@@ -49,7 +50,7 @@ Route::middleware('auth')->group(function () {
         Route::delete('/colis/{coli}', [ColiController::class, 'destroy'])->name('colis.destroy');
         Route::post('/colis/{coli}/add-step', [ColiController::class, 'addStep'])->name('colis.add-step');
     });
-    
+
     // Factures et reçus
     Route::get('/colis/{coli}/facture', [FactureController::class, 'facture'])->name('colis.facture');
     Route::get('/colis/{coli}/recu', [FactureController::class, 'recu'])->name('colis.recu');

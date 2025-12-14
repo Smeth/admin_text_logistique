@@ -14,30 +14,25 @@ class UserSeeder extends Seeder
      */
     public function run(): void
     {
+        // Récupérer le rôle admin (le plus élevé)
         $adminRole = Role::where('name', 'admin')->first();
-        $agentRole = Role::where('name', 'agent')->first();
+        
+        if (!$adminRole) {
+            throw new \Exception('Le rôle admin n\'existe pas. Exécutez d\'abord RoleSeeder.');
+        }
 
-        // Créer un utilisateur admin par défaut
+        // Créer un utilisateur admin par défaut avec le rôle le plus élevé
         User::updateOrCreate(
-            ['email' => 'admin@gesttransport.com'],
+            ['email' => 'admin@livrango.com'],
             [
                 'name' => 'Administrateur',
-                'email' => 'admin@gesttransport.com',
-                'password' => Hash::make('password'),
-                'role_id' => $adminRole?->id,
+                'email' => 'admin@livrango.com',
+                'password' => Hash::make('admin'),
+                'role_id' => $adminRole->id, // Rôle admin = le plus élevé
             ]
         );
 
-        // Créer un utilisateur agent par défaut (optionnel)
-        User::updateOrCreate(
-            ['email' => 'agent@gesttransport.com'],
-            [
-                'name' => 'Agent',
-                'email' => 'agent@gesttransport.com',
-                'password' => Hash::make('password'),
-                'role_id' => $agentRole?->id,
-            ]
-        );
+        echo "✅ Utilisateur admin créé avec le rôle le plus élevé (admin)\n";
     }
 }
 

@@ -1,4 +1,4 @@
-name: CI/CD Laravel livrango admin Deployment
+name: CI/CD Livrango Admin Deployment sur EC2
 
 on:
   push:
@@ -32,7 +32,7 @@ jobs:
       run: composer install --no-dev --prefer-dist --optimize-autoloader
 
     # ------------------------------------------
-    # NODE & ASSETS BUILD
+    # NODE BUILD
     # ------------------------------------------
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -82,7 +82,7 @@ jobs:
         path: ./artifact
 
     # ------------------------------------------
-    # UPLOAD ZIP TO SERVER (CORRECTED, NO FOLDER)
+    # UPLOAD ZIP TO SERVER (IMPORTANT: FILE PATH)
     # ------------------------------------------
     - name: Upload Artifact via SCP
       uses: appleboy/scp-action@v0.1.7
@@ -91,11 +91,11 @@ jobs:
         username: ${{ secrets.SSH_USERNAME }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         source: "./artifact/build.zip"
-        target: "/var/www/livrango/admin/tmp/"   # ALWAYS A DIRECTORY ✔
+        target: "/var/www/livrango/admin/tmp/build.zip"  # UPLOAD AS FILE ✔
 
 
     # ------------------------------------------
-    # DEPLOYMENT SCRIPT (with rollback)
+    # DEPLOY SCRIPT WITH ROLLBACK
     # ------------------------------------------
     - name: Deploy via SSH
       uses: appleboy/ssh-action@v1.0.0
@@ -126,14 +126,13 @@ jobs:
             echo "❌ Deployment FAILED. Rolling back..."
 
             if [ -n "$PREVIOUS_RELEASE" ]; then
-              echo "🔙 Restoring previous release: $PREVIOUS_RELEASE"
+              echo "🔙 Restoring: $PREVIOUS_RELEASE"
               ln -sfn "$PREVIOUS_RELEASE" "$PROJECT_DIR/current"
               sudo service php8.3-fpm restart
-              echo "✅ Rollback done."
+              echo "✅ Rollback completed."
             else
-              echo "⚠️ No previous release found. Rollback skipped."
+              echo "⚠️ No previous release to rollback."
             fi
-
             exit 1
           }
 
@@ -145,43 +144,49 @@ jobs:
           echo "📁 Creating new release: $NEW_RELEASE"
           mkdir -p "$NEW_RELEASE"
 
-          echo "📦 Extracting ZIP..."
+          echo "📦 Extracting build.zip..."
           unzip -q "$TMP_DIR/build.zip" -d "$NEW_RELEASE"
+
 
           ####################################
           # LINK SHARED STORAGE
           ####################################
-          echo "🔗 Linking storage..."
+          echo "🔗 Linking storage folder..."
           rm -rf "$NEW_RELEASE/storage"
           ln -s "$PROJECT_DIR/storage" "$NEW_RELEASE/storage"
+
 
           ####################################
           # PERMISSIONS
           ####################################
-          echo "🔧 Setting permissions..."
+          echo "🔧 Fixing permissions..."
           sudo chown -R www-data:www-data "$NEW_RELEASE"
           sudo chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache"
+
 
           ####################################
           # UPDATE CURRENT SYMLINK
           ####################################
-          echo "🔄 Switching current -> $NEW_RELEASE"
+          echo "🔄 Switching current -> new release"
           ln -sfn "$NEW_RELEASE" "$PROJECT_DIR/current"
+
 
           ####################################
           # LARAVEL OPTIMIZATION
           ####################################
-          echo "⚡ Optimizing Laravel..."
+          echo "🚀 Running Laravel optimizations..."
           cd "$PROJECT_DIR/current"
           php artisan optimize:clear || true
           php artisan config:cache || true
           php artisan route:cache || true
 
+
           ####################################
           # CLEAN ZIP
           ####################################
-          echo "🧹 Cleaning temporary files..."
+          echo "🧹 Removing ZIP..."
           rm -f "$TMP_DIR/build.zip"
+
 
           echo "=============================="
           echo " 🎉 Deployment SUCCESSFUL !!"

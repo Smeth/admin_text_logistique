@@ -18,7 +18,9 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    # PHP
+    # ------------------------------------------
+    # PHP SETUP
+    # ------------------------------------------
     - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:
@@ -29,7 +31,9 @@ jobs:
     - name: Install Composer Dependencies
       run: composer install --no-dev --prefer-dist --optimize-autoloader
 
-    # Node
+    # ------------------------------------------
+    # NODE BUILD
+    # ------------------------------------------
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
@@ -43,20 +47,23 @@ jobs:
     - name: Build Frontend Assets
       run: npm run build
 
-    # ZIP artifact
-    - name: Prepare Deployment ZIP
+    # ------------------------------------------
+    # ZIP ARTIFACT
+    # ------------------------------------------
+    - name: Prepare Deployment Artifact
       run: |
-        zip -r build.zip . -x "*.git*" "node_modules/" "vendor/" "artifact/*"
+        mkdir -p artifact
+        zip -r artifact/build.zip . -x "*.git*" "artifact/*"
 
-    - name: Upload ZIP
+    - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: livrango-build
-        path: build.zip
+        name: build
+        path: artifact/build.zip
 
 
   ###############################################
-  # 2) DEPLOY JOB — executed on the server (SSH)
+  # 2) DEPLOY JOB — executed via SSH on server
   ###############################################
   deploy:
     name: Deploy to Production Server
@@ -65,26 +72,31 @@ jobs:
 
     steps:
 
+    # ------------------------------------------
+    # DOWNLOAD THE ZIP
+    # ------------------------------------------
     - name: Download Artifact
       uses: actions/download-artifact@v4
       with:
-        name: livrango-build
-        path: .
+        name: build
+        path: ./artifact
 
-    # Upload the ZIP — ALWAYS AS FILE, NEVER AS FOLDER
-    - name: Upload build.zip via SCP
+    # ------------------------------------------
+    # SEND TO SERVER (GitHub structure unchanged)
+    # ------------------------------------------
+    - name: Upload Artifact via SCP
       uses: appleboy/scp-action@v0.1.7
       with:
         host: ${{ secrets.AWS_HOST }}
         username: ${{ secrets.SSH_USERNAME }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
-        source: "build.zip"
+        source: "./artifact"
         target: "/var/www/livrango/admin/tmp/build.zip"
 
 
-    ####################################################
-    #  DEPLOYMENT SCRIPT (UNZIP + RELEASE + SYMLINK)
-    ####################################################
+    # ------------------------------------------
+    # DEPLOY SCRIPT — FIXED TO READ YOUR REAL PATH
+    # ------------------------------------------
     - name: Deploy via SSH
       uses: appleboy/ssh-action@v1.0.0
       with:
@@ -94,50 +106,55 @@ jobs:
 
         script: |
           set -e
+
           PROJECT_DIR="/var/www/livrango/admin"
           RELEASES_DIR="$PROJECT_DIR/releases"
           TMP_DIR="$PROJECT_DIR/tmp"
+
+          # YOUR REAL ZIP LOCATION (CONFIRMED)
+          ZIP_PATH="$TMP_DIR/build.zip/artifact/build.zip"
+
           RELEASE_NAME=$(date +%Y%m%d_%H%M%S)
           NEW_RELEASE="$RELEASES_DIR/$RELEASE_NAME"
           PREVIOUS_RELEASE=$(readlink "$PROJECT_DIR/current" || echo "")
 
+          echo "=============================="
+          echo " 🔄 Starting deployment..."
+          echo "ZIP found at: $ZIP_PATH"
+          echo "=============================="
+
           rollback() {
-            echo "❌ Deployment failed — rolling back…"
+            echo "❌ Deployment FAILED — Rolling back..."
             if [ -n "$PREVIOUS_RELEASE" ]; then
               ln -sfn "$PREVIOUS_RELEASE" "$PROJECT_DIR/current"
-              sudo service php8.3-fpm restart
-              echo "Rollback OK"
-            else
-              echo "No previous release — rollback skipped"
             fi
             exit 1
           }
+
           trap rollback ERR
 
-          echo "📁 Creating release: $NEW_RELEASE"
           mkdir -p "$NEW_RELEASE"
 
-          echo "📦 Extracting ZIP…"
-          unzip -q "$TMP_DIR/build.zip" -d "$NEW_RELEASE"
+          echo "📦 Extracting ZIP..."
+          unzip -q "$ZIP_PATH" -d "$NEW_RELEASE"
 
-          echo "🔗 Linking storage…"
+          echo "🔗 Linking storage..."
           rm -rf "$NEW_RELEASE/storage"
           ln -s "$PROJECT_DIR/storage" "$NEW_RELEASE/storage"
 
-          echo "🔧 Permissions"
+          echo "🔧 Fixing permissions..."
           sudo chown -R www-data:www-data "$NEW_RELEASE"
           sudo chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache"
 
-          echo "🔄 Switching release"
+          echo "🔄 Updating current symlink..."
           ln -sfn "$NEW_RELEASE" "$PROJECT_DIR/current"
 
-          echo "⚡ Optimizing Laravel"
+          echo "🚀 Running Laravel optimization..."
           cd "$PROJECT_DIR/current"
           php artisan optimize:clear || true
           php artisan config:cache || true
           php artisan route:cache || true
 
-          echo "🧹 Cleaning"
-          rm -f "$TMP_DIR/build.zip"
-
-          echo "🎉 Deployment OK"
+          echo "=============================="
+          echo " 🎉 Deployment SUCCESSFUL !!"
+          echo "=============================="

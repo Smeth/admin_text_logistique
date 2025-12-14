@@ -6,6 +6,10 @@ on:
       - master
 
 jobs:
+
+  # ==========================================
+  # 1) BUILD JOB — runs on GitHub
+  # ==========================================
   build:
     name: Build Laravel Project
     runs-on: ubuntu-latest
@@ -15,7 +19,7 @@ jobs:
       uses: actions/checkout@v4
 
     # -----------------------
-    # PHP Setup & Composer
+    # PHP SETUP
     # -----------------------
     - name: Setup PHP
       uses: shivammathur/setup-php@v2
@@ -28,7 +32,7 @@ jobs:
       run: composer install --no-dev --prefer-dist --optimize-autoloader
 
     # -----------------------
-    # Node.js & Assets Build
+    # NODE & FRONT BUILD
     # -----------------------
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -44,7 +48,7 @@ jobs:
       run: npm run build
 
     # -----------------------
-    # ZIP Build Artifact
+    # ZIP ARTIFACT
     # -----------------------
     - name: Prepare Deployment Artifact
       run: |
@@ -57,59 +61,108 @@ jobs:
         name: build
         path: artifact/build.zip
 
-  # -----------------------
-  # Deployment Job
-  # -----------------------
+
+  # ==========================================
+  # 2) DEPLOY JOB — runs on your server via SSH
+  # ==========================================
   deploy:
     name: Deploy to Production Server
     needs: build
     runs-on: ubuntu-latest
 
     steps:
+    # Download ZIP from BUILD
     - name: Download Artifact
       uses: actions/download-artifact@v4
       with:
         name: build
         path: ./artifact
 
+    # Upload ZIP to server
+    - name: Upload Artifact via SCP
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.AWS_HOST }}
+        username: ${{ secrets.SSH_USERNAME }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        source: "./artifact/build.zip"
+        target: "/var/www/livrango/admin/tmp"
+
+    # Deploy
     - name: Deploy via SSH
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.AWS_HOST }}
         username: ${{ secrets.SSH_USERNAME }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
+
         script: |
           set -e
 
           PROJECT_DIR="/var/www/livrango/admin"
           RELEASES_DIR="$PROJECT_DIR/releases"
+          TMP_DIR="$PROJECT_DIR/tmp"
+
           RELEASE_NAME=$(date +%Y%m%d_%H%M%S)
           NEW_RELEASE="$RELEASES_DIR/$RELEASE_NAME"
+          PREVIOUS_RELEASE=$(readlink $PROJECT_DIR/current || echo "")
 
-          echo "📁 Creating new release directory: $NEW_RELEASE"
-          mkdir -p $NEW_RELEASE
+          echo "=============================="
+          echo " 🔄 Starting deployment..."
+          echo "=============================="
 
-          echo "⬆️ Extracting build artifact..."
-          unzip -q ./artifact/build.zip -d $NEW_RELEASE
+          # --------------------------
+          # ROLLBACK FUNCTION
+          # --------------------------
+          rollback() {
+            echo "❌ Deployment FAILED. Rolling back..."
 
-          echo "🔗 Linking storage folder..."
-          rm -rf $NEW_RELEASE/storage
-          ln -s $PROJECT_DIR/storage $NEW_RELEASE/storage
+            if [ -n "$PREVIOUS_RELEASE" ]; then
+              echo "🔙 Reverting to previous release: $PREVIOUS_RELEASE"
+              ln -sfn "$PREVIOUS_RELEASE" "$PROJECT_DIR/current"
+              sudo service php8.3-fpm restart
+              echo "✅ Rollback completed successfully."
+            else
+              echo "⚠️ No previous release found. Rollback skipped."
+            fi
 
-          echo "🔧 Setting correct permissions..."
-          sudo chown -R www-data:www-data $NEW_RELEASE
-          sudo chmod -R 775 $NEW_RELEASE/storage $NEW_RELEASE/bootstrap/cache
+            exit 1
+          }
+
+          trap rollback ERR
+
+          # --------------------------
+          # DEPLOY PROCESS
+          # --------------------------
+          echo "📁 Creating new release: $NEW_RELEASE"
+          mkdir -p "$NEW_RELEASE"
+
+          echo "📦 Extracting build.zip..."
+          unzip -q "$TMP_DIR/build.zip" -d "$NEW_RELEASE"
+
+          echo "🔗 Linking shared storage..."
+          rm -rf "$NEW_RELEASE/storage"
+          ln -s "$PROJECT_DIR/storage" "$NEW_RELEASE/storage"
+
+          echo "🔧 Permissions..."
+          sudo chown -R www-data:www-data "$NEW_RELEASE"
+          sudo chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache"
 
           echo "🔄 Updating current symlink..."
-          ln -sfn $NEW_RELEASE $PROJECT_DIR/current
+          ln -sfn "$NEW_RELEASE" "$PROJECT_DIR/current"
 
           echo "🚀 Restarting PHP-FPM..."
           sudo service php8.3-fpm restart
 
           echo "🧹 Optimizing Laravel..."
-          cd $PROJECT_DIR/current
+          cd "$PROJECT_DIR/current"
           php artisan optimize:clear || true
           php artisan config:cache || true
           php artisan route:cache || true
 
-          echo "🎉 Deployment completed successfully!"
+          echo "🧹 Cleaning temporary files..."
+          rm -f "$TMP_DIR/build.zip"
+
+          echo "=============================="
+          echo " 🎉 Deployment SUCCESSFUL!"
+          echo "=============================="

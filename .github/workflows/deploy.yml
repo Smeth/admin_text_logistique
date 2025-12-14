@@ -1,4 +1,4 @@
-name: CI/CD Laravel livrango adminDeployment
+name: CI/CD Laravel livrango admin Deployment
 
 on:
   push:
@@ -71,7 +71,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # Download ZIP from BUILD step
+
+    # ------------------------------------------
+    # DOWNLOAD ZIP
+    # ------------------------------------------
     - name: Download Artifact
       uses: actions/download-artifact@v4
       with:
@@ -79,7 +82,7 @@ jobs:
         path: ./artifact
 
     # ------------------------------------------
-    # Upload ZIP to server — CORRECTED PATH
+    # UPLOAD ZIP TO SERVER (CORRECTED, NO FOLDER)
     # ------------------------------------------
     - name: Upload Artifact via SCP
       uses: appleboy/scp-action@v0.1.7
@@ -88,8 +91,7 @@ jobs:
         username: ${{ secrets.SSH_USERNAME }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         source: "./artifact/build.zip"
-        target: "/var/www/livrango/admin/tmp/"   # ✔ CORRECT
-
+        target: "/var/www/livrango/admin/tmp/"   # ALWAYS A DIRECTORY ✔
 
 
     # ------------------------------------------
@@ -111,7 +113,7 @@ jobs:
 
           RELEASE_NAME=$(date +%Y%m%d_%H%M%S)
           NEW_RELEASE="$RELEASES_DIR/$RELEASE_NAME"
-          PREVIOUS_RELEASE=$(readlink $PROJECT_DIR/current || echo "")
+          PREVIOUS_RELEASE=$(readlink "$PROJECT_DIR/current" || echo "")
 
           echo "=============================="
           echo " 🔄 Starting deployment..."
@@ -137,7 +139,6 @@ jobs:
 
           trap rollback ERR
 
-
           ####################################
           # DEPLOY PROCESS
           ####################################
@@ -147,44 +148,39 @@ jobs:
           echo "📦 Extracting ZIP..."
           unzip -q "$TMP_DIR/build.zip" -d "$NEW_RELEASE"
 
-
           ####################################
-          # LINK SHARED FOLDERS
+          # LINK SHARED STORAGE
           ####################################
-          echo "🔗 Linking storage folder..."
+          echo "🔗 Linking storage..."
           rm -rf "$NEW_RELEASE/storage"
           ln -s "$PROJECT_DIR/storage" "$NEW_RELEASE/storage"
 
-
           ####################################
-          # SET PERMISSIONS
+          # PERMISSIONS
           ####################################
-          echo "🔧 Updating permissions..."
+          echo "🔧 Setting permissions..."
           sudo chown -R www-data:www-data "$NEW_RELEASE"
           sudo chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache"
-
 
           ####################################
           # UPDATE CURRENT SYMLINK
           ####################################
-          echo "🔄 Updating current symlink..."
+          echo "🔄 Switching current -> $NEW_RELEASE"
           ln -sfn "$NEW_RELEASE" "$PROJECT_DIR/current"
-
 
           ####################################
           # LARAVEL OPTIMIZATION
           ####################################
-          echo "🚀 Optimizing Laravel..."
+          echo "⚡ Optimizing Laravel..."
           cd "$PROJECT_DIR/current"
           php artisan optimize:clear || true
           php artisan config:cache || true
           php artisan route:cache || true
 
-
           ####################################
-          # CLEAN TMP
+          # CLEAN ZIP
           ####################################
-          echo "🧹 Removing temporary ZIP..."
+          echo "🧹 Cleaning temporary files..."
           rm -f "$TMP_DIR/build.zip"
 
           echo "=============================="

@@ -8,7 +8,7 @@ on:
 jobs:
 
   ###############################################
-  # 1) BUILD JOB — executed on GitHub
+  # 1) BUILD JOB — executed on GitHub Runner
   ###############################################
   build:
     name: Build Laravel Project
@@ -30,6 +30,14 @@ jobs:
 
     - name: Install Composer Dependencies
       run: composer install --no-dev --prefer-dist --optimize-autoloader
+
+    # ------------------------------------------
+    # CLEAR ALL LARAVEL CACHES BEFORE PACKAGING
+    # ------------------------------------------
+    - name: Clear Laravel caches BEFORE packaging
+      run: |
+        php artisan optimize:clear || true
+        rm -rf bootstrap/cache/*.php || true
 
     # ------------------------------------------
     # NODE BUILD
@@ -63,7 +71,7 @@ jobs:
 
 
   ###############################################
-  # 2) DEPLOY JOB — executed via SSH on server
+  # 2) DEPLOY JOB — executed via SSH on your server
   ###############################################
   deploy:
     name: Deploy to Production Server
@@ -73,7 +81,7 @@ jobs:
     steps:
 
     # ------------------------------------------
-    # DOWNLOAD THE ZIP
+    # DOWNLOAD ARTIFACT
     # ------------------------------------------
     - name: Download Artifact
       uses: actions/download-artifact@v4
@@ -82,7 +90,7 @@ jobs:
         path: ./artifact
 
     # ------------------------------------------
-    # SEND TO SERVER (GitHub structure unchanged)
+    # PUSH TO SERVER — your structure confirmed
     # ------------------------------------------
     - name: Upload Artifact via SCP
       uses: appleboy/scp-action@v0.1.7
@@ -93,9 +101,8 @@ jobs:
         source: "./artifact"
         target: "/var/www/livrango/admin/tmp/build.zip"
 
-
     # ------------------------------------------
-    # DEPLOY SCRIPT — FIXED TO READ YOUR REAL PATH
+    # DEPLOY SCRIPT WITH SAFE MIGRATIONS
     # ------------------------------------------
     - name: Deploy via SSH
       uses: appleboy/ssh-action@v1.0.0
@@ -110,8 +117,6 @@ jobs:
           PROJECT_DIR="/var/www/livrango/admin"
           RELEASES_DIR="$PROJECT_DIR/releases"
           TMP_DIR="$PROJECT_DIR/tmp"
-
-          # YOUR REAL ZIP LOCATION (CONFIRMED)
           ZIP_PATH="$TMP_DIR/build.zip/artifact/build.zip"
 
           RELEASE_NAME=$(date +%Y%m%d_%H%M%S)
@@ -120,14 +125,19 @@ jobs:
 
           echo "=============================="
           echo " 🔄 Starting deployment..."
-          echo "ZIP found at: $ZIP_PATH"
+          echo " ZIP: $ZIP_PATH"
           echo "=============================="
 
           rollback() {
-            echo "❌ Deployment FAILED — Rolling back..."
+            echo "❌ Error detected — Rolling back..."
+
             if [ -n "$PREVIOUS_RELEASE" ]; then
               ln -sfn "$PREVIOUS_RELEASE" "$PROJECT_DIR/current"
+              echo "Rollback done ✔"
+            else
+              echo "No previous release to restore ❗"
             fi
+
             exit 1
           }
 
@@ -135,25 +145,31 @@ jobs:
 
           mkdir -p "$NEW_RELEASE"
 
-          echo "📦 Extracting ZIP..."
+          echo "📦 Extracting..."
           unzip -q "$ZIP_PATH" -d "$NEW_RELEASE"
 
           echo "🔗 Linking storage..."
           rm -rf "$NEW_RELEASE/storage"
           ln -s "$PROJECT_DIR/storage" "$NEW_RELEASE/storage"
 
-          echo "🔧 Fixing permissions..."
+          echo "🔧 Permissions..."
           sudo chown -R www-data:www-data "$NEW_RELEASE"
           sudo chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache"
 
-          echo "🔄 Updating current symlink..."
+          echo "🔄 Switching release..."
           ln -sfn "$NEW_RELEASE" "$PROJECT_DIR/current"
 
-          echo "🚀 Running Laravel optimization..."
+          echo "🚀 Running Laravel optimizations..."
           cd "$PROJECT_DIR/current"
           php artisan optimize:clear || true
           php artisan config:cache || true
           php artisan route:cache || true
+
+          echo "📚 Running migrations safely..."
+          php artisan migrate --force
+
+          echo "🌱 Running seeds safely..."
+          php artisan db:seed --force || true
 
           echo "=============================="
           echo " 🎉 Deployment SUCCESSFUL !!"

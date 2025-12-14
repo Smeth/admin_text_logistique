@@ -7,55 +7,72 @@ on:
 
 jobs:
   build:
+    name: Build Laravel Project
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
+    - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Set up PHP
+    # -----------------------
+    # PHP Setup & Composer
+    # -----------------------
+    - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:
         php-version: '8.3'
-        extensions: bcmath, pdo_mysql, zip, mbstring
+        extensions: bcmath, pdo_mysql, mbstring, zip, tokenizer
         coverage: none
 
-    - name: Set up Node.js
+    - name: Install Composer Dependencies
+      run: composer install --no-dev --prefer-dist --optimize-autoloader
+
+    # -----------------------
+    # Node.js & Assets Build
+    # -----------------------
+    - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '20'
         cache: 'npm'
         cache-dependency-path: package-lock.json
 
-    - name: Cache Composer dependencies
-      uses: actions/cache@v4
-      with:
-        path: vendor
-        key: ${{ runner.os }}-composer-${{ hashFiles('composer.lock') }}
-        restore-keys: ${{ runner.os }}-composer-
-
-    - name: Install PHP Dependencies
-      run: composer install --no-dev --prefer-dist
-
     - name: Install NPM Dependencies
       run: npm ci
 
-    - name: Build Assets
+    - name: Build Frontend Assets
       run: npm run build
 
-    - name: Run Tests (Optional)
-      run: php artisan test || echo "Tests skipped"
-      continue-on-error: true
+    # -----------------------
+    # ZIP Build Artifact
+    # -----------------------
+    - name: Prepare Deployment Artifact
+      run: |
+        mkdir -p artifact
+        zip -r artifact/build.zip . -x "*.git*" "artifact/*"
 
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: build
+        path: artifact/build.zip
+
+  # -----------------------
+  # Deployment Job
+  # -----------------------
   deploy:
+    name: Deploy to Production Server
     needs: build
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+    - name: Download Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: build
+        path: ./artifact
 
-    - name: SSH Deploy Command
+    - name: Deploy via SSH
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.AWS_HOST }}
@@ -65,38 +82,34 @@ jobs:
           set -e
 
           PROJECT_DIR="/var/www/livrango/admin"
+          RELEASES_DIR="$PROJECT_DIR/releases"
+          RELEASE_NAME=$(date +%Y%m%d_%H%M%S)
+          NEW_RELEASE="$RELEASES_DIR/$RELEASE_NAME"
 
-          echo "📁 Navigating to project directory"
-          cd $PROJECT_DIR
+          echo "📁 Creating new release directory: $NEW_RELEASE"
+          mkdir -p $NEW_RELEASE
 
-          echo "🔐 Marking directory as safe for Git"
-          git config --global --add safe.directory $PROJECT_DIR
+          echo "⬆️ Extracting build artifact..."
+          unzip -q ./artifact/build.zip -d $NEW_RELEASE
 
-          echo "⬇️ Pulling latest code"
-          git pull origin master
+          echo "🔗 Linking storage folder..."
+          rm -rf $NEW_RELEASE/storage
+          ln -s $PROJECT_DIR/storage $NEW_RELEASE/storage
 
-          echo "📦 Installing PHP dependencies"
-          composer install --no-dev --prefer-dist --optimize-autoloader
+          echo "🔧 Setting correct permissions..."
+          sudo chown -R www-data:www-data $NEW_RELEASE
+          sudo chmod -R 775 $NEW_RELEASE/storage $NEW_RELEASE/bootstrap/cache
 
-          echo "📦 Installing NPM dependencies"
-          npm ci --production=false
+          echo "🔄 Updating current symlink..."
+          ln -sfn $NEW_RELEASE $PROJECT_DIR/current
 
-          echo "🏗️ Building frontend"
-          npm run build
-
-          echo "🔗 Storage link"
-          php artisan storage:link || true
-
-          echo "🗃️ Running migrations"
-          php artisan migrate --force
-
-          echo "🧹 Clearing caches"
-          php artisan optimize:clear
-
-          echo "⚡ Optimizing Laravel"
-          php artisan optimize
-
-          echo "🔁 Restarting PHP-FPM"
+          echo "🚀 Restarting PHP-FPM..."
           sudo service php8.3-fpm restart
 
-          echo "🚀 Deployment successful!"
+          echo "🧹 Optimizing Laravel..."
+          cd $PROJECT_DIR/current
+          php artisan optimize:clear || true
+          php artisan config:cache || true
+          php artisan route:cache || true
+
+          echo "🎉 Deployment completed successfully!"

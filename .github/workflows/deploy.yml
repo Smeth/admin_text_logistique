@@ -164,5 +164,5 @@ jobs:
           rm -f "$TMP_DIR/build.zip"
 
           echo "=============================="
-          echo " 🎉 Deployment SUCCESSFUL!"
+          echo " 🎉 Deployment SUCCESSFUL !!"
           echo "=============================="

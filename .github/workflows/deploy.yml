@@ -1,4 +1,4 @@
-name: CI/CD Laravel Deployment
+name: CI/CD Laravel livrango adminDeployment
 
 on:
   push:

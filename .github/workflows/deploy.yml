@@ -79,7 +79,7 @@ jobs:
         path: ./artifact
 
     # ------------------------------------------
-    # Upload ZIP to server (FIXED TARGET!)
+    # Upload ZIP to server — CORRECTED PATH
     # ------------------------------------------
     - name: Upload Artifact via SCP
       uses: appleboy/scp-action@v0.1.7
@@ -88,7 +88,7 @@ jobs:
         username: ${{ secrets.SSH_USERNAME }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         source: "./artifact/build.zip"
-        target: "/var/www/livrango/admin/tmp/"   # IMPORTANT ✔
+        target: "/var/www/livrango/admin/tmp/build.zip"  # FINAL PATH ✔️
 
 
     # ------------------------------------------
@@ -185,7 +185,6 @@ jobs:
           ####################################
           echo "🧹 Removing temporary ZIP..."
           rm -f "$TMP_DIR/build.zip"
-
 
           echo "=============================="
           echo " 🎉 Deployment SUCCESSFUL !!"

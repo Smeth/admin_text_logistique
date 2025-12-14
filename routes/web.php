@@ -85,4 +85,33 @@ Route::middleware('auth')->group(function () {
         Route::resource('users', UserController::class);
         Route::resource('roles', RoleController::class);
     });
+
+    // Sauvegarde, Export et Import (Admin uniquement)
+    Route::middleware('role:admin')->group(function () {
+        // Sauvegardes
+        Route::prefix('backups')->name('backups.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\BackupController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\BackupController::class, 'create'])->name('create');
+            Route::get('/{filename}/download', [\App\Http\Controllers\BackupController::class, 'download'])->name('download');
+            Route::post('/restore', [\App\Http\Controllers\BackupController::class, 'restore'])->name('restore');
+            Route::delete('/{filename}', [\App\Http\Controllers\BackupController::class, 'destroy'])->name('destroy');
+        });
+
+        // Exports
+        Route::prefix('exports')->name('exports.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\ExportController::class, 'index'])->name('index');
+            Route::get('/clients', [\App\Http\Controllers\ExportController::class, 'exportClients'])->name('clients');
+            Route::get('/colis', [\App\Http\Controllers\ExportController::class, 'exportColis'])->name('colis');
+            Route::get('/transactions', [\App\Http\Controllers\ExportController::class, 'exportTransactions'])->name('transactions');
+            Route::get('/configurations', [\App\Http\Controllers\ExportController::class, 'exportConfigurations'])->name('configurations');
+        });
+
+        // Imports
+        Route::prefix('imports')->name('imports.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\ImportController::class, 'index'])->name('index');
+            Route::post('/clients', [\App\Http\Controllers\ImportController::class, 'importClients'])->name('clients');
+            Route::post('/colis', [\App\Http\Controllers\ImportController::class, 'importColis'])->name('colis');
+            Route::post('/configurations', [\App\Http\Controllers\ImportController::class, 'importConfigurations'])->name('configurations');
+        });
+    });
 });

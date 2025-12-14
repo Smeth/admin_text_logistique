@@ -7,9 +7,9 @@ on:
 
 jobs:
 
-  # ==========================================
-  # 1) BUILD JOB — runs on GitHub
-  # ==========================================
+  ###############################################
+  # 1) BUILD JOB — executed on GitHub
+  ###############################################
   build:
     name: Build Laravel Project
     runs-on: ubuntu-latest
@@ -18,9 +18,9 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    # -----------------------
+    # ------------------------------------------
     # PHP SETUP
-    # -----------------------
+    # ------------------------------------------
     - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:
@@ -31,9 +31,9 @@ jobs:
     - name: Install Composer Dependencies
       run: composer install --no-dev --prefer-dist --optimize-autoloader
 
-    # -----------------------
-    # NODE & FRONT BUILD
-    # -----------------------
+    # ------------------------------------------
+    # NODE & ASSETS BUILD
+    # ------------------------------------------
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
@@ -47,9 +47,9 @@ jobs:
     - name: Build Frontend Assets
       run: npm run build
 
-    # -----------------------
+    # ------------------------------------------
     # ZIP ARTIFACT
-    # -----------------------
+    # ------------------------------------------
     - name: Prepare Deployment Artifact
       run: |
         mkdir -p artifact
@@ -62,23 +62,25 @@ jobs:
         path: artifact/build.zip
 
 
-  # ==========================================
-  # 2) DEPLOY JOB — runs on your server via SSH
-  # ==========================================
+  ###############################################
+  # 2) DEPLOY JOB — executed via SSH on server
+  ###############################################
   deploy:
     name: Deploy to Production Server
     needs: build
     runs-on: ubuntu-latest
 
     steps:
-    # Download ZIP from BUILD
+    # Download ZIP from BUILD step
     - name: Download Artifact
       uses: actions/download-artifact@v4
       with:
         name: build
         path: ./artifact
 
-    # Upload ZIP to server (FIXED HERE)
+    # ------------------------------------------
+    # Upload ZIP to server (FIXED TARGET!)
+    # ------------------------------------------
     - name: Upload Artifact via SCP
       uses: appleboy/scp-action@v0.1.7
       with:
@@ -86,9 +88,12 @@ jobs:
         username: ${{ secrets.SSH_USERNAME }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         source: "./artifact/build.zip"
-        target: "/var/www/livrango/admin/tmp/build.zip"
+        target: "/var/www/livrango/admin/tmp/"   # IMPORTANT ✔
 
-    # Deploy
+
+    # ------------------------------------------
+    # DEPLOYMENT SCRIPT (with rollback)
+    # ------------------------------------------
     - name: Deploy via SSH
       uses: appleboy/ssh-action@v1.0.0
       with:
@@ -111,17 +116,17 @@ jobs:
           echo " 🔄 Starting deployment..."
           echo "=============================="
 
-          # --------------------------
+          ####################################
           # ROLLBACK FUNCTION
-          # --------------------------
+          ####################################
           rollback() {
             echo "❌ Deployment FAILED. Rolling back..."
 
             if [ -n "$PREVIOUS_RELEASE" ]; then
-              echo "🔙 Reverting to previous release: $PREVIOUS_RELEASE"
+              echo "🔙 Restoring previous release: $PREVIOUS_RELEASE"
               ln -sfn "$PREVIOUS_RELEASE" "$PROJECT_DIR/current"
               sudo service php8.3-fpm restart
-              echo "✅ Rollback completed successfully."
+              echo "✅ Rollback done."
             else
               echo "⚠️ No previous release found. Rollback skipped."
             fi
@@ -131,37 +136,56 @@ jobs:
 
           trap rollback ERR
 
-          # --------------------------
+
+          ####################################
           # DEPLOY PROCESS
-          # --------------------------
+          ####################################
           echo "📁 Creating new release: $NEW_RELEASE"
           mkdir -p "$NEW_RELEASE"
 
-          echo "📦 Extracting build.zip..."
+          echo "📦 Extracting ZIP..."
           unzip -q "$TMP_DIR/build.zip" -d "$NEW_RELEASE"
 
-          echo "🔗 Linking shared storage..."
+
+          ####################################
+          # LINK SHARED FOLDERS
+          ####################################
+          echo "🔗 Linking storage folder..."
           rm -rf "$NEW_RELEASE/storage"
           ln -s "$PROJECT_DIR/storage" "$NEW_RELEASE/storage"
 
-          echo "🔧 Permissions..."
+
+          ####################################
+          # SET PERMISSIONS
+          ####################################
+          echo "🔧 Updating permissions..."
           sudo chown -R www-data:www-data "$NEW_RELEASE"
           sudo chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache"
 
+
+          ####################################
+          # UPDATE CURRENT SYMLINK
+          ####################################
           echo "🔄 Updating current symlink..."
           ln -sfn "$NEW_RELEASE" "$PROJECT_DIR/current"
 
-          echo "🚀 Restarting PHP-FPM..."
-          sudo service php8.3-fpm restart
 
-          echo "🧹 Optimizing Laravel..."
+          ####################################
+          # LARAVEL OPTIMIZATION
+          ####################################
+          echo "🚀 Optimizing Laravel..."
           cd "$PROJECT_DIR/current"
           php artisan optimize:clear || true
           php artisan config:cache || true
           php artisan route:cache || true
 
-          echo "🧹 Cleaning temporary files..."
+
+          ####################################
+          # CLEAN TMP
+          ####################################
+          echo "🧹 Removing temporary ZIP..."
           rm -f "$TMP_DIR/build.zip"
+
 
           echo "=============================="
           echo " 🎉 Deployment SUCCESSFUL !!"

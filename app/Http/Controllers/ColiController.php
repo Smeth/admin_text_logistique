@@ -100,6 +100,8 @@ class ColiController extends Controller
             'mode_paiement' => 'nullable|in:espece,carte,virement,cheque,mobile_money',
             'description_etape' => 'nullable|string|max:1000',
             'localisation_etape' => 'nullable|string|max:255',
+            'images' => 'nullable|array',
+            'images.*' => 'image|mimes:jpeg,jpg,png,webp|max:4096',
         ]);
 
         // Retirer les champs de paiement de validated avant de créer le colis
@@ -110,8 +112,18 @@ class ColiController extends Controller
         $modePaiement = $request->input('mode_paiement', 'espece');
         $descriptionEtape = $request->input('description_etape');
         $localisationEtape = $request->input('localisation_etape');
+        $images = $request->file('images', []);
 
-        unset($validated['paiement_complet'], $validated['paiement_partiel'], $validated['caisse_id'], $validated['montant_paye'], $validated['mode_paiement'], $validated['description_etape'], $validated['localisation_etape']);
+        unset(
+            $validated['paiement_complet'],
+            $validated['paiement_partiel'],
+            $validated['caisse_id'],
+            $validated['montant_paye'],
+            $validated['mode_paiement'],
+            $validated['description_etape'],
+            $validated['localisation_etape'],
+            $validated['images']
+        );
 
         $coli = Coli::create($validated);
         
@@ -124,6 +136,19 @@ class ColiController extends Controller
             'commentaire' => $descriptionEtape ?: 'Colis créé',
             'localisation' => $localisationEtape ?: ($coli->agenceDepart->nom_agence ?? null),
         ]);
+
+        // Enregistrer les images si fournies
+        if (!empty($images)) {
+            foreach ($images as $file) {
+                $path = $file->store('colis/' . $coli->id, 'public');
+
+                $coli->images()->create([
+                    'path' => $path,
+                    'original_name' => $file->getClientOriginalName(),
+                    'size' => $file->getSize(),
+                ]);
+            }
+        }
         
         // Calculer automatiquement le prix si un tarif est sélectionné
         if ($coli->tarif && $coli->poids) {
@@ -224,19 +249,45 @@ class ColiController extends Controller
 
     public function show(Coli $coli)
     {
-        $coli->load(['client', 'agenceDepart', 'agenceArrivee', 'transporteur', 'devise', 'tarif', 'paiements.caisse', 'paiements.user', 'historique.user']);
+        $coli->load([
+            'client',
+            'agenceDepart',
+            'agenceArrivee',
+            'transporteur',
+            'devise',
+            'tarif',
+            'paiements.caisse',
+            'paiements.user',
+            'historique.user',
+            'images',
+        ]);
         return view('colis.show', compact('coli'));
     }
 
     public function edit(Coli $coli)
     {
-        $coli->load(['client', 'agenceDepart', 'agenceArrivee', 'transporteur', 'devise', 'tarif', 'paiements']);
+        $user = auth()->user();
+        $coli->load(['client', 'agenceDepart', 'agenceArrivee', 'transporteur', 'devise', 'tarif', 'paiements', 'images']);
         $clients = Client::where('statut', 'actif')->orderBy('nom')->get();
+        
+        // Filtrer les agences pour responsable d'agence
         $agences = Agence::orderBy('nom_agence')->get();
+        if ($user->isResponsableAgence() && $user->agence_id) {
+            $agences = Agence::where('id', $user->agence_id)->get();
+        }
+        
         $transporteurs = EntrepriseTransporteur::where('statut', 'actif')->orderBy('nom_entreprise')->get();
         $devises = Devise::where('actif', true)->orderBy('est_principale', 'desc')->orderBy('nom')->get();
         $tarifs = Tarif::where('actif', true)->orderBy('nom_tarif')->get();
+        
+        // Filtrer les caisses pour responsable d'agence
         $caisses = Caisse::where('statut', 'ouverte')->orderBy('nom_caisse')->get();
+        if ($user->isResponsableAgence() && $user->agence_id) {
+            $caisses = Caisse::where('statut', 'ouverte')
+                ->where('agence_id', $user->agence_id)
+                ->orderBy('nom_caisse')
+                ->get();
+        }
         
         return view('colis.edit', compact('coli', 'clients', 'agences', 'transporteurs', 'devises', 'tarifs', 'caisses'));
     }
@@ -267,17 +318,33 @@ class ColiController extends Controller
             'mode_paiement' => 'nullable|in:espece,carte,virement,cheque,mobile_money',
             'description_etape' => 'nullable|string|max:1000',
             'localisation_etape' => 'nullable|string|max:255',
+            'images' => 'nullable|array',
+            'images.*' => 'image|mimes:jpeg,jpg,png,webp|max:4096',
         ]);
 
         // Enregistrer l'historique si le statut change
         $statutAvant = $coli->statut;
         $descriptionEtape = $request->input('description_etape');
         $localisationEtape = $request->input('localisation_etape');
+        $images = $request->file('images', []);
         
         // Retirer les champs d'historique de validated avant de mettre à jour
-        unset($validated['description_etape'], $validated['localisation_etape']);
+        unset($validated['description_etape'], $validated['localisation_etape'], $validated['images']);
         
         $coli->update($validated);
+
+        // Ajouter de nouvelles images si fournies
+        if (!empty($images)) {
+            foreach ($images as $file) {
+                $path = $file->store('colis/' . $coli->id, 'public');
+
+                $coli->images()->create([
+                    'path' => $path,
+                    'original_name' => $file->getClientOriginalName(),
+                    'size' => $file->getSize(),
+                ]);
+            }
+        }
         
         // Si le statut a changé, enregistrer dans l'historique
         if ($statutAvant !== $coli->statut) {
@@ -371,5 +438,38 @@ class ColiController extends Controller
         $coli->delete();
         return redirect()->route('colis.index')
             ->with('success', 'Colis supprimé avec succès.');
+    }
+
+    /**
+     * Ajouter une étape de suivi manuellement
+     */
+    public function addStep(Request $request, Coli $coli)
+    {
+        $validated = $request->validate([
+            'statut_etape' => 'required|in:emballe,expedie_port,arrive_aeroport_depart,en_vol,arrive_aeroport_transit,arrive_aeroport_destination,en_dedouanement,arrive_entrepot,livre,retourne',
+            'description_etape' => 'required|string|max:1000',
+            'localisation_etape' => 'nullable|string|max:255',
+        ]);
+
+        $statutAvant = $coli->statut;
+        $statutApres = $validated['statut_etape'];
+
+        // Mettre à jour le statut du colis si différent
+        if ($statutAvant !== $statutApres) {
+            $coli->update(['statut' => $statutApres]);
+        }
+
+        // Créer l'entrée dans l'historique
+        ColisHistorique::create([
+            'coli_id' => $coli->id,
+            'statut_avant' => $statutAvant,
+            'statut_apres' => $statutApres,
+            'user_id' => auth()->id(),
+            'commentaire' => $validated['description_etape'],
+            'localisation' => $validated['localisation_etape'] ?? null,
+        ]);
+
+        return redirect()->route('colis.show', $coli)
+            ->with('success', 'Étape de suivi ajoutée avec succès.');
     }
 }

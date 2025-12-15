@@ -6,7 +6,7 @@
 @section('content')
 <div class="max-w-4xl mx-auto">
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 p-6">
-        <form action="{{ route('colis.store') }}" method="POST" class="space-y-6">
+        <form action="{{ route('colis.store') }}" method="POST" enctype="multipart/form-data" class="space-y-6">
             @csrf
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -26,7 +26,16 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Poids (kg) <span class="text-red-500">*</span></label>
-                    <input type="number" step="0.01" name="poids" value="{{ old('poids') }}" required class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
+                    <input type="number" 
+                           step="0.01" 
+                           min="0" 
+                           name="poids" 
+                           id="poids"
+                           value="{{ old('poids') }}" 
+                           placeholder="Ex: 2.50"
+                           required 
+                           class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Valeur décimale uniquement (ex: 2.50 kg)</p>
                     @error('poids')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                 </div>
                 <div>
@@ -154,8 +163,16 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Frais transport <span class="text-red-500">*</span></label>
-                    <input type="number" step="0.01" name="frais_transport" id="frais_transport" value="{{ old('frais_transport') }}" required class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
+                    <input type="text" 
+                           name="frais_transport" 
+                           id="frais_transport" 
+                           value="{{ old('frais_transport') ? number_format(old('frais_transport'), 0, ',', ' ') : '' }}" 
+                           placeholder="Ex: 10 000"
+                           required 
+                           class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
+                    <input type="hidden" id="frais_transport_raw" name="frais_transport_raw">
                     <p id="prix_calcule_info" class="mt-1 text-xs text-green-600 dark:text-green-400 hidden"></p>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Format: séparateurs de milliers automatiques</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Valeur déclarée</label>
@@ -165,6 +182,42 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Description contenu</label>
                 <textarea name="description_contenu" rows="3" class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">{{ old('description_contenu') }}</textarea>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Images du colis (optionnel)
+                </label>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-center w-full">
+                        <label for="images_upload" class="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 dark:border-slate-600 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
+                            <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                                <svg class="w-10 h-10 mb-3 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                </svg>
+                                <p class="mb-2 text-sm text-gray-500 dark:text-gray-400">
+                                    <span class="font-semibold">Cliquez pour sélectionner</span> ou glissez-déposez
+                                </p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">
+                                    Plusieurs images possibles (JPEG, PNG, WebP, max 4 Mo chacune)
+                                </p>
+                            </div>
+                            <input id="images_upload" type="file" name="images[]" multiple accept="image/jpeg,image/png,image/webp" class="hidden">
+                        </label>
+                    </div>
+                    
+                    <!-- Compteur d'images -->
+                    <div id="images_count" class="hidden text-sm font-medium text-gray-700 dark:text-gray-300">
+                        <span id="images_count_number">0</span> image(s) sélectionnée(s)
+                    </div>
+                    
+                    <!-- Aperçu des images sélectionnées -->
+                    <div id="images_preview" class="grid grid-cols-2 md:grid-cols-4 gap-4 hidden">
+                        <!-- Les miniatures seront ajoutées ici par JavaScript -->
+                    </div>
+                </div>
+                @error('images')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
+                @error('images.*')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
             </div>
 
             <!-- Section Paiement -->
@@ -250,11 +303,76 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const poidsInput = document.querySelector('input[name="poids"]');
+    const poidsInput = document.getElementById('poids');
     const tarifSelect = document.getElementById('tarif_id');
     const fraisTransportInput = document.getElementById('frais_transport');
+    const fraisTransportRaw = document.getElementById('frais_transport_raw');
     const prixCalculeInfo = document.getElementById('prix_calcule_info');
     const deviseSelect = document.getElementById('devise_id');
+    // Fonction pour formater un nombre avec séparateurs de milliers
+    function formatNumber(num) {
+        if (!num && num !== 0) return '';
+        const numStr = num.toString().replace(/\s/g, '').replace(/,/g, '.');
+        const numValue = parseFloat(numStr);
+        if (isNaN(numValue)) return '';
+        return Math.round(numValue).toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+    }
+
+    // Fonction pour convertir un nombre formaté en valeur numérique
+    function parseFormattedNumber(str) {
+        if (!str) return 0;
+        const cleaned = str.toString().replace(/\s/g, '').replace(/,/g, '.');
+        const num = parseFloat(cleaned);
+        return isNaN(num) ? 0 : num;
+    }
+
+    // Formater le champ frais de transport
+    fraisTransportInput.addEventListener('input', function(e) {
+        const cursorPosition = this.selectionStart;
+        const value = this.value;
+        const numericValue = parseFormattedNumber(value);
+        const formatted = formatNumber(numericValue);
+        
+        this.value = formatted;
+        
+        // Restaurer la position du curseur
+        const diff = formatted.length - value.length;
+        this.setSelectionRange(cursorPosition + diff, cursorPosition + diff);
+        
+        // Mettre à jour la valeur brute pour le calcul
+        fraisTransportRaw.value = numericValue;
+    });
+
+    // Convertir la valeur formatée en valeur numérique avant soumission
+    const form = document.querySelector('form');
+    form.addEventListener('submit', function(e) {
+        const formattedValue = fraisTransportInput.value;
+        const numericValue = parseFormattedNumber(formattedValue);
+        
+        // Créer un champ caché avec la valeur numérique ou remplacer la valeur
+        if (fraisTransportRaw) {
+            fraisTransportRaw.value = numericValue;
+            fraisTransportRaw.name = 'frais_transport';
+            fraisTransportInput.name = '';
+        } else {
+            // Créer un input caché avec la valeur numérique
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'frais_transport';
+            hiddenInput.value = numericValue;
+            form.appendChild(hiddenInput);
+            fraisTransportInput.name = '';
+        }
+    });
+
+
+    // Formater le poids avec 2 décimales
+    poidsInput.addEventListener('blur', function() {
+        const value = parseFloat(this.value);
+        if (!isNaN(value) && value >= 0) {
+            this.value = value.toFixed(2);
+        }
+    });
 
     // Calculer le prix automatiquement
     function calculerPrix() {
@@ -283,13 +401,14 @@ document.addEventListener('DOMContentLoaded', function() {
             prix = prixMaximum;
         }
 
-        // Mettre à jour le champ frais_transport
-        fraisTransportInput.value = prix.toFixed(2);
+        // Mettre à jour le champ frais_transport avec formatage
+        fraisTransportInput.value = formatNumber(prix);
+        fraisTransportRaw.value = prix;
 
         // Afficher l'info
         const selectedOption = deviseSelect.options[deviseSelect.selectedIndex];
         const symbole = selectedOption ? selectedOption.getAttribute('data-symbole') || 'FCFA' : 'FCFA';
-        prixCalculeInfo.textContent = `Prix calculé automatiquement: ${prix.toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 2})} ${symbole}`;
+        prixCalculeInfo.textContent = `Prix calculé automatiquement: ${formatNumber(prix)} ${symbole}`;
         prixCalculeInfo.classList.remove('hidden');
     }
 
@@ -316,7 +435,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (paiementComplet.checked) {
                 // Si paiement complet, pré-remplir avec le montant total
-                const fraisTransport = parseFloat(fraisTransportInput.value) || 0;
+                const fraisTransport = parseFormattedNumber(fraisTransportInput.value) || 0;
                 montantPayeInput.value = fraisTransport.toFixed(2);
                 montantPayeInput.readOnly = true;
                 montantPayeInput.required = false;
@@ -339,7 +458,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function updateMontantRestant() {
-        const fraisTransport = parseFloat(fraisTransportInput.value) || 0;
+        const fraisTransport = parseFormattedNumber(fraisTransportInput.value) || 0;
         const montantPaye = parseFloat(montantPayeInput.value) || 0;
         const restant = fraisTransport - montantPaye;
         
@@ -375,7 +494,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     fraisTransportInput.addEventListener('input', function() {
         if (paiementComplet.checked) {
-            const fraisTransport = parseFloat(this.value) || 0;
+            const fraisTransport = parseFormattedNumber(this.value) || 0;
             montantPayeInput.value = fraisTransport.toFixed(2);
         }
         if (paiementPartiel.checked) {
@@ -391,6 +510,124 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialiser au chargement
     togglePaiementSection();
+
+    // Gestion de l'aperçu des images
+    const imagesUpload = document.getElementById('images_upload');
+    const imagesPreview = document.getElementById('images_preview');
+    const imagesCount = document.getElementById('images_count');
+    const imagesCountNumber = document.getElementById('images_count_number');
+    let selectedImages = [];
+
+    function updateImagesPreview() {
+        if (selectedImages.length === 0) {
+            imagesPreview.classList.add('hidden');
+            imagesCount.classList.add('hidden');
+            imagesPreview.innerHTML = '';
+        } else {
+            imagesPreview.classList.remove('hidden');
+            imagesCount.classList.remove('hidden');
+            imagesCountNumber.textContent = selectedImages.length;
+            
+            imagesPreview.innerHTML = '';
+            selectedImages.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const div = document.createElement('div');
+                    div.className = 'relative group';
+                    div.innerHTML = `
+                        <img src="${e.target.result}" alt="Aperçu" class="w-full h-32 object-cover rounded-lg border border-gray-200 dark:border-slate-600">
+                        <button type="button" onclick="removeImage(${index})" class="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400 truncate" title="${file.name}">${file.name}</p>
+                    `;
+                    imagesPreview.appendChild(div);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+    }
+
+    window.removeImage = function(index) {
+        selectedImages.splice(index, 1);
+        updateFileInput();
+        updateImagesPreview();
+    };
+
+    function updateFileInput() {
+        const dataTransfer = new DataTransfer();
+        selectedImages.forEach(file => {
+            dataTransfer.items.add(file);
+        });
+        imagesUpload.files = dataTransfer.files;
+    }
+
+    imagesUpload.addEventListener('change', function(e) {
+        const files = Array.from(e.target.files);
+        
+        // Vérifier la taille de chaque fichier (max 4 Mo)
+        const maxSize = 4 * 1024 * 1024; // 4 Mo en octets
+        const validFiles = [];
+        const invalidFiles = [];
+        
+        files.forEach(file => {
+            if (file.size > maxSize) {
+                invalidFiles.push(file.name);
+            } else {
+                validFiles.push(file);
+            }
+        });
+        
+        if (invalidFiles.length > 0) {
+            alert(`Les fichiers suivants sont trop volumineux (max 4 Mo) :\n${invalidFiles.join('\n')}`);
+        }
+        
+        // Ajouter les fichiers valides à la liste
+        selectedImages = [...selectedImages, ...validFiles];
+        updateFileInput();
+        updateImagesPreview();
+    });
+
+    // Gestion du glisser-déposer
+    const dropZone = imagesUpload.closest('label');
+    
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+            dropZone.classList.add('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20');
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+            dropZone.classList.remove('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20');
+        }, false);
+    });
+
+    dropZone.addEventListener('drop', function(e) {
+        const files = Array.from(e.dataTransfer.files).filter(file => 
+            file.type.startsWith('image/') && 
+            ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)
+        );
+        
+        if (files.length > 0) {
+            const maxSize = 4 * 1024 * 1024;
+            const validFiles = files.filter(file => file.size <= maxSize);
+            selectedImages = [...selectedImages, ...validFiles];
+            updateFileInput();
+            updateImagesPreview();
+        }
+    }, false);
 });
 </script>
 @endsection

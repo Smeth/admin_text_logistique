@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\ColiImage;
 
 class Coli extends Model
 {
@@ -83,6 +84,11 @@ class Coli extends Model
     public function historique(): HasMany
     {
         return $this->hasMany(ColisHistorique::class, 'coli_id');
+    }
+
+    public function images(): HasMany
+    {
+        return $this->hasMany(ColiImage::class, 'coli_id');
     }
 
     public function isLivre(): bool

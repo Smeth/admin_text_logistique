@@ -113,6 +113,21 @@
         @if($coli->description_contenu)
         <div class="mt-6"><p class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Description</p><p class="text-gray-900 dark:text-white">{{ $coli->description_contenu }}</p></div>
         @endif
+
+        @if($coli->images->count() > 0)
+        <div class="mt-6 border-t border-gray-200 dark:border-slate-700 pt-6">
+            <h4 class="text-md font-semibold text-gray-900 dark:text-white mb-4">Images du colis</h4>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                @foreach($coli->images as $image)
+                    <a href="{{ $image->url }}" target="_blank"
+                       class="block rounded-lg overflow-hidden border border-gray-200 dark:border-slate-700 hover:ring-2 hover:ring-indigo-500">
+                        <img src="{{ $image->url }}" alt="{{ $image->original_name }}"
+                             class="w-full h-32 object-cover">
+                    </a>
+                @endforeach
+            </div>
+        </div>
+        @endif
     </div>
 
     <!-- Historique des paiements -->

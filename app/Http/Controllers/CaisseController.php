@@ -128,7 +128,8 @@ class CaisseController extends Controller
     {
         $agences = Agence::all();
         $users = User::all();
-        return view('caisses.edit', compact('caisse', 'agences', 'users'));
+        $devises = \App\Models\Devise::where('actif', true)->orderBy('est_principale', 'desc')->orderBy('nom')->get();
+        return view('caisses.edit', compact('caisse', 'agences', 'users', 'devises'));
     }
 
     /**

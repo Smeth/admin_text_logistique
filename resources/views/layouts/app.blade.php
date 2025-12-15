@@ -1,16 +1,20 @@
 <!DOCTYPE html>
 <html lang="fr" x-data="{
-    darkMode: (localStorage.getItem('darkMode') === 'true' || (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches))
+    darkMode: (() => {
+        const stored = localStorage.getItem('darkMode');
+        const prefers = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const initial = stored !== null ? stored === 'true' : prefers;
+        localStorage.setItem('darkMode', initial); // fige la valeur dès le chargement
+        return initial;
+    })()
 }"
       x-bind:class="{ 'dark': darkMode }"
       x-init="
-        // Initialiser le dark mode au chargement
         if (darkMode) {
             document.documentElement.classList.add('dark');
         } else {
             document.documentElement.classList.remove('dark');
         }
-        // Surveiller les changements
         $watch('darkMode', val => {
             localStorage.setItem('darkMode', val);
             if (val) {
@@ -39,10 +43,14 @@
     <script>
         // Script d'initialisation du dark mode avant Alpine.js
         (function() {
-            const darkMode = localStorage.getItem('darkMode') === 'true' ||
-                           (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches);
-            if (darkMode) {
+            const stored = localStorage.getItem('darkMode');
+            const prefers = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const initial = stored !== null ? stored === 'true' : prefers;
+            localStorage.setItem('darkMode', initial);
+            if (initial) {
                 document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
             }
         })();
     </script>

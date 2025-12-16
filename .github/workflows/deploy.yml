@@ -90,7 +90,7 @@ jobs:
         path: ./artifact
 
     # ------------------------------------------
-    # PUSH TO SERVER — your structure confirmed
+    # PUSH TO SERVER — FIXED DESTINATION
     # ------------------------------------------
     - name: Upload Artifact via SCP
       uses: appleboy/scp-action@v0.1.7
@@ -98,11 +98,11 @@ jobs:
         host: ${{ secrets.AWS_HOST }}
         username: ${{ secrets.SSH_USERNAME }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
-        source: "./artifact"
+        source: "./artifact/build.zip"
         target: "/var/www/livrango/admin/tmp/build.zip"
 
     # ------------------------------------------
-    # DEPLOY SCRIPT WITH SAFE MIGRATIONS
+    # DEPLOY SCRIPT WITH SAFE MIGRATIONS + FIXES
     # ------------------------------------------
     - name: Deploy via SSH
       uses: appleboy/ssh-action@v1.0.0
@@ -117,7 +117,7 @@ jobs:
           PROJECT_DIR="/var/www/livrango/admin"
           RELEASES_DIR="$PROJECT_DIR/releases"
           TMP_DIR="$PROJECT_DIR/tmp"
-          ZIP_PATH="$TMP_DIR/build.zip/artifact/build.zip"
+          ZIP_PATH="$TMP_DIR/build.zip"
 
           RELEASE_NAME=$(date +%Y%m%d_%H%M%S)
           NEW_RELEASE="$RELEASES_DIR/$RELEASE_NAME"
@@ -147,6 +147,12 @@ jobs:
 
           echo "📦 Extracting..."
           unzip -q "$ZIP_PATH" -d "$NEW_RELEASE"
+
+          echo "📁 Ensuring Laravel mandatory directories exist..."
+          mkdir -p "$NEW_RELEASE/bootstrap/cache"
+          mkdir -p "$NEW_RELEASE/storage/framework/cache"
+          mkdir -p "$NEW_RELEASE/storage/framework/sessions"
+          mkdir -p "$NEW_RELEASE/storage/framework/views"
 
           echo "🔗 Linking storage..."
           rm -rf "$NEW_RELEASE/storage"

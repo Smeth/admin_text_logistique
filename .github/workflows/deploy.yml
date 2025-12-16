@@ -99,7 +99,7 @@ jobs:
         username: ${{ secrets.SSH_USERNAME }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         source: "./artifact/build.zip"
-        target: "/var/www/livrango/admin/tmp/build.zip"
+        target: "/var/www/livrango/admin/tmp"
 
     # ------------------------------------------
     # DEPLOY SCRIPT — FIX CACHE DIRECTORY ERROR
@@ -147,16 +147,19 @@ jobs:
           mkdir -p "$NEW_RELEASE"
 
           echo "🔍 Finding artifact..."
+          echo "📂 Checking $TMP_DIR contents:"
+          ls -la "$TMP_DIR" || echo "Directory does not exist"
+
           # Vérifier les emplacements possibles (SCP peut créer un dossier artifact ou mettre directement le fichier)
           ZIP_PATH=""
+          SOURCE_FILE=""
+
           if [ -f "$TMP_DIR/artifact/build.zip" ]; then
-            # Si le fichier est dans artifact/, le déplacer vers tmp/ pour normaliser
-            mv "$TMP_DIR/artifact/build.zip" "$TMP_DIR/build.zip" 2>/dev/null || true
-            ZIP_PATH="$TMP_DIR/build.zip"
-            echo "✅ Found and moved artifact to: $ZIP_PATH"
+            SOURCE_FILE="$TMP_DIR/artifact/build.zip"
+            echo "📦 Found artifact in artifact/ directory: $SOURCE_FILE"
           elif [ -f "$TMP_DIR/build.zip" ]; then
-            ZIP_PATH="$TMP_DIR/build.zip"
-            echo "✅ Found artifact at: $ZIP_PATH"
+            SOURCE_FILE="$TMP_DIR/build.zip"
+            echo "📦 Found artifact directly: $SOURCE_FILE"
           else
             echo "❌ Error: build.zip not found!"
             echo "📂 Contents of $TMP_DIR:"
@@ -168,14 +171,56 @@ jobs:
             exit 1
           fi
 
-          # Vérifier que le fichier existe et n'est pas vide
-          if [ ! -s "$ZIP_PATH" ]; then
-            echo "❌ Error: $ZIP_PATH is empty or does not exist!"
+          # Normaliser le chemin : toujours utiliser tmp/build.zip
+          if [ "$SOURCE_FILE" != "$TMP_DIR/build.zip" ]; then
+            echo "📋 Copying artifact to standard location..."
+            cp "$SOURCE_FILE" "$TMP_DIR/build.zip" || {
+              echo "❌ Error: Failed to copy artifact from $SOURCE_FILE to $TMP_DIR/build.zip"
+              exit 1
+            }
+          fi
+
+          ZIP_PATH="$TMP_DIR/build.zip"
+
+          # Vérifier que le fichier existe vraiment
+          if [ ! -f "$ZIP_PATH" ]; then
+            echo "❌ Error: $ZIP_PATH does not exist after copy!"
             exit 1
           fi
 
-          echo "📦 Extracting $ZIP_PATH..."
-          unzip -q "$ZIP_PATH" -d "$NEW_RELEASE"
+          # Vérifier que le fichier existe vraiment et n'est pas vide
+          echo "🔍 Verifying artifact file..."
+          if [ ! -f "$ZIP_PATH" ]; then
+            echo "❌ Error: $ZIP_PATH does not exist!"
+            ls -la "$TMP_DIR" || true
+            exit 1
+          fi
+
+          if [ ! -s "$ZIP_PATH" ]; then
+            echo "❌ Error: $ZIP_PATH is empty!"
+            ls -lh "$ZIP_PATH" || true
+            exit 1
+          fi
+
+          FILE_SIZE=$(du -h "$ZIP_PATH" | cut -f1)
+          echo "✅ Artifact verified: $ZIP_PATH (size: $FILE_SIZE)"
+
+          # Vérifier le type de fichier
+          FILE_TYPE=$(file "$ZIP_PATH" 2>/dev/null || echo "unknown")
+          echo "📄 File type: $FILE_TYPE"
+
+          echo "📦 Extracting $ZIP_PATH to $NEW_RELEASE..."
+          unzip -q "$ZIP_PATH" -d "$NEW_RELEASE" || {
+            echo "❌ Error: Failed to extract $ZIP_PATH"
+            echo "📂 Verifying file again:"
+            ls -lh "$ZIP_PATH" || true
+            file "$ZIP_PATH" || true
+            echo "📂 Checking destination directory:"
+            ls -la "$NEW_RELEASE" || true
+            exit 1
+          }
+
+          echo "✅ Extraction successful"
 
           echo "📁 Ensuring Laravel folders exist..."
           mkdir -p "$NEW_RELEASE/bootstrap/cache"

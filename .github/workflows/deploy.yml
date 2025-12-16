@@ -86,24 +86,31 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -e
             PROJECT_DIR="/var/www/livrango/admin"
 
             echo "📁 Creating necessary directories..."
-            sudo mkdir -p "$PROJECT_DIR/tmp"
-            sudo mkdir -p "$PROJECT_DIR/releases"
-            sudo mkdir -p "$PROJECT_DIR/storage/app/public/colis"
-            sudo mkdir -p "$PROJECT_DIR/storage/logs"
-            sudo mkdir -p "$PROJECT_DIR/storage/framework/cache"
-            sudo mkdir -p "$PROJECT_DIR/storage/framework/sessions"
-            sudo mkdir -p "$PROJECT_DIR/storage/framework/views"
+            # Créer les dossiers sans sudo si possible, sinon avec sudo -n (non-interactif)
+            mkdir -p "$PROJECT_DIR/tmp" 2>/dev/null || sudo -n mkdir -p "$PROJECT_DIR/tmp" || {
+              echo "⚠️ Warning: Could not create tmp directory, will try during deployment"
+            }
+            mkdir -p "$PROJECT_DIR/releases" 2>/dev/null || sudo -n mkdir -p "$PROJECT_DIR/releases" || {
+              echo "⚠️ Warning: Could not create releases directory, will try during deployment"
+            }
+            mkdir -p "$PROJECT_DIR/storage/app/public/colis" 2>/dev/null || sudo -n mkdir -p "$PROJECT_DIR/storage/app/public/colis" || true
+            mkdir -p "$PROJECT_DIR/storage/logs" 2>/dev/null || sudo -n mkdir -p "$PROJECT_DIR/storage/logs" || true
+            mkdir -p "$PROJECT_DIR/storage/framework/cache" 2>/dev/null || sudo -n mkdir -p "$PROJECT_DIR/storage/framework/cache" || true
+            mkdir -p "$PROJECT_DIR/storage/framework/sessions" 2>/dev/null || sudo -n mkdir -p "$PROJECT_DIR/storage/framework/sessions" || true
+            mkdir -p "$PROJECT_DIR/storage/framework/views" 2>/dev/null || sudo -n mkdir -p "$PROJECT_DIR/storage/framework/views" || true
 
-            echo "🔐 Setting initial permissions..."
-            sudo chown -R $USER:www-data "$PROJECT_DIR/tmp"
-            sudo chown -R $USER:www-data "$PROJECT_DIR/releases"
-            sudo chown -R $USER:www-data "$PROJECT_DIR/storage"
-            sudo chmod -R 775 "$PROJECT_DIR/tmp"
-            sudo chmod -R 775 "$PROJECT_DIR/releases"
-            sudo chmod -R 775 "$PROJECT_DIR/storage"
+            echo "🔐 Setting initial permissions (if sudo available)..."
+            # Essayer sans sudo d'abord, puis avec sudo -n (non-interactif)
+            chown -R $USER:www-data "$PROJECT_DIR/tmp" 2>/dev/null || sudo -n chown -R $USER:www-data "$PROJECT_DIR/tmp" 2>/dev/null || true
+            chown -R $USER:www-data "$PROJECT_DIR/releases" 2>/dev/null || sudo -n chown -R $USER:www-data "$PROJECT_DIR/releases" 2>/dev/null || true
+            chown -R $USER:www-data "$PROJECT_DIR/storage" 2>/dev/null || sudo -n chown -R $USER:www-data "$PROJECT_DIR/storage" 2>/dev/null || true
+            chmod -R 775 "$PROJECT_DIR/tmp" 2>/dev/null || sudo -n chmod -R 775 "$PROJECT_DIR/tmp" 2>/dev/null || true
+            chmod -R 775 "$PROJECT_DIR/releases" 2>/dev/null || sudo -n chmod -R 775 "$PROJECT_DIR/releases" 2>/dev/null || true
+            chmod -R 775 "$PROJECT_DIR/storage" 2>/dev/null || sudo -n chmod -R 775 "$PROJECT_DIR/storage" 2>/dev/null || true
 
       - name: Upload Artifact to Server
         uses: appleboy/scp-action@v0.1.7
@@ -148,6 +155,10 @@ jobs:
 
             # Créer les dossiers nécessaires
             echo "📁 Creating release directory..."
+            mkdir -p "$RELEASES_DIR" 2>/dev/null || sudo -n mkdir -p "$RELEASES_DIR" || {
+              echo "❌ Error: Cannot create releases directory"
+              exit 1
+            }
             mkdir -p "$NEW_RELEASE"
 
             # Vérifier que le fichier ZIP existe
@@ -167,9 +178,10 @@ jobs:
             ln -s "$PROJECT_DIR/storage" "$NEW_RELEASE/storage"
 
             echo "🔐 Setting permissions..."
-            sudo chown -R $USER:www-data "$NEW_RELEASE"
-            sudo chmod -R 755 "$NEW_RELEASE"
-            sudo chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache" || true
+            # Essayer sans sudo d'abord, puis avec sudo -n (non-interactif)
+            chown -R $USER:www-data "$NEW_RELEASE" 2>/dev/null || sudo -n chown -R $USER:www-data "$NEW_RELEASE" 2>/dev/null || true
+            chmod -R 755 "$NEW_RELEASE" 2>/dev/null || sudo -n chmod -R 755 "$NEW_RELEASE" 2>/dev/null || true
+            chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache" 2>/dev/null || sudo -n chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache" 2>/dev/null || true
 
             echo "🔄 Switching symlink..."
             # Supprimer l'ancien lien/dossier current s'il existe
@@ -214,9 +226,9 @@ jobs:
 
             # Finaliser les permissions pour storage
             echo "🔐 Finalizing storage permissions..."
-            sudo chown -R $USER:www-data "$PROJECT_DIR/storage"
-            sudo chmod -R 775 "$PROJECT_DIR/storage/app/public"
-            sudo chmod -R 775 "$PROJECT_DIR/storage/app/public/colis" || true
+            chown -R $USER:www-data "$PROJECT_DIR/storage" 2>/dev/null || sudo -n chown -R $USER:www-data "$PROJECT_DIR/storage" 2>/dev/null || true
+            chmod -R 775 "$PROJECT_DIR/storage/app/public" 2>/dev/null || sudo -n chmod -R 775 "$PROJECT_DIR/storage/app/public" 2>/dev/null || true
+            chmod -R 775 "$PROJECT_DIR/storage/app/public/colis" 2>/dev/null || sudo -n chmod -R 775 "$PROJECT_DIR/storage/app/public/colis" 2>/dev/null || true
 
             # Nettoyer les anciennes releases (garder les 5 dernières)
             echo "🧹 Cleaning old releases..."

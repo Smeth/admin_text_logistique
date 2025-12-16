@@ -5,23 +5,6 @@
     <div class="max-w-md w-full space-y-8 p-8">
         <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8">
             <div class="text-center mb-8">
-                <!-- Espace pour le logo -->
-                <div class="mb-6 flex justify-center">
-                    <div class="w-24 h-24 bg-gray-100 dark:bg-slate-700 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-300 dark:border-slate-600 overflow-hidden">
-                        <!-- Logo LIVRANGO -->
-                        <img src="{{ asset('images/logo.png') }}"
-                             alt="LIVRANGO"
-                             class="max-w-full max-h-full object-contain p-2"
-                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                        <!-- Fallback si l'image n'existe pas -->
-                        <div class="hidden items-center justify-center w-full h-full">
-                            <svg class="w-12 h-12 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                            </svg>
-                        </div>
-                    </div>
-                </div>
-
                 <h2 class="text-3xl font-bold text-gray-900 dark:text-white">Connexion</h2>
                 <p class="mt-2 text-gray-600 dark:text-gray-400">Accédez à votre tableau de bord</p>
             </div>

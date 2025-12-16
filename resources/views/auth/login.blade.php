@@ -7,11 +7,11 @@
             <div class="text-center mb-8">
                 <!-- Espace pour le logo -->
                 <div class="mb-6 flex justify-center">
-                    <div class="w-24 h-24 bg-gray-100 dark:bg-slate-700 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-300 dark:border-slate-600">
-                        <!-- Placeholder pour le logo - Remplacez par votre image -->
-                        <img src="{{ asset('images/logo') }}"
+                    <div class="w-24 h-24 bg-gray-100 dark:bg-slate-700 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-300 dark:border-slate-600 overflow-hidden">
+                        <!-- Logo LIVRANGO -->
+                        <img src="{{ asset('images/logo.png') }}"
                              alt="LIVRANGO"
-                             class="max-w-full max-h-full object-contain"
+                             class="max-w-full max-h-full object-contain p-2"
                              onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                         <!-- Fallback si l'image n'existe pas -->
                         <div class="hidden items-center justify-center w-full h-full">

@@ -98,8 +98,8 @@ jobs:
         host: ${{ secrets.AWS_HOST }}
         username: ${{ secrets.SSH_USERNAME }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
-        source: "./artifact"
-        target: "/var/www/livrango/admin/tmp/build.zip"
+        source: "./artifact/build.zip"
+        target: "/var/www/livrango/admin/tmp"
 
     # ------------------------------------------
     # DEPLOY SCRIPT — FIX CACHE DIRECTORY ERROR
@@ -117,7 +117,7 @@ jobs:
           PROJECT_DIR="/var/www/livrango/admin"
           RELEASES_DIR="$PROJECT_DIR/releases"
           TMP_DIR="$PROJECT_DIR/tmp"
-          ZIP_PATH="$TMP_DIR/build.zip/artifact/build.zip"   # ← Ton chemin conservé à 100%
+          ZIP_PATH="$TMP_DIR/build.zip"
 
           RELEASE_NAME=$(date +%Y%m%d_%H%M%S)
           NEW_RELEASE="$RELEASES_DIR/$RELEASE_NAME"
@@ -143,7 +143,18 @@ jobs:
 
           trap rollback ERR
 
+          echo "📁 Creating directories..."
+          mkdir -p "$RELEASES_DIR"
+          mkdir -p "$TMP_DIR"
           mkdir -p "$NEW_RELEASE"
+
+          echo "🔍 Verifying artifact..."
+          if [ ! -f "$ZIP_PATH" ]; then
+            echo "❌ Error: $ZIP_PATH not found!"
+            echo "📂 Contents of $TMP_DIR:"
+            ls -la "$TMP_DIR" || echo "Directory does not exist"
+            exit 1
+          fi
 
           echo "📦 Extracting..."
           unzip -q "$ZIP_PATH" -d "$NEW_RELEASE"
@@ -158,4 +169,54 @@ jobs:
           rm -rf "$NEW_RELEASE/storage"
           ln -s "$PROJECT_DIR/storage" "$NEW_RELEASE/storage"
 
-          echo "🔧 Per
+          echo "🔐 Setting permissions..."
+          chown -R $USER:www-data "$NEW_RELEASE" 2>/dev/null || sudo -n chown -R $USER:www-data "$NEW_RELEASE" 2>/dev/null || true
+          chmod -R 755 "$NEW_RELEASE" 2>/dev/null || sudo -n chmod -R 755 "$NEW_RELEASE" 2>/dev/null || true
+          chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache" 2>/dev/null || sudo -n chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache" 2>/dev/null || true
+
+          echo "🔄 Switching symlink..."
+          if [ -e "$PROJECT_DIR/current" ]; then
+            rm -rf "$PROJECT_DIR/current"
+          fi
+          ln -sfn "$NEW_RELEASE" "$PROJECT_DIR/current"
+
+          if [ ! -L "$PROJECT_DIR/current" ]; then
+            echo "❌ Error: Failed to create symlink!"
+            exit 1
+          fi
+
+          echo "⚙️ Laravel optimizations..."
+          cd "$PROJECT_DIR/current"
+
+          echo "🔗 Creating storage symlink..."
+          rm -f public/storage
+          php artisan storage:link || {
+            ln -s ../../storage/app/public public/storage || true
+          }
+
+          if [ ! -L "public/storage" ]; then
+            echo "⚠️ Warning: public/storage symlink not created, trying manual method..."
+            ln -sfn "$PROJECT_DIR/storage/app/public" public/storage
+          fi
+
+          php artisan optimize:clear
+          php artisan view:clear
+          php artisan config:cache
+          php artisan route:cache
+
+          echo "🗄️ Database migrations..."
+          php artisan migrate --force
+
+          echo "🌱 Seeds..."
+          php artisan db:seed --force || true
+
+          echo "🔐 Finalizing storage permissions..."
+          chown -R $USER:www-data "$PROJECT_DIR/storage" 2>/dev/null || sudo -n chown -R $USER:www-data "$PROJECT_DIR/storage" 2>/dev/null || true
+          chmod -R 775 "$PROJECT_DIR/storage/app/public" 2>/dev/null || sudo -n chmod -R 775 "$PROJECT_DIR/storage/app/public" 2>/dev/null || true
+          chmod -R 775 "$PROJECT_DIR/storage/app/public/colis" 2>/dev/null || sudo -n chmod -R 775 "$PROJECT_DIR/storage/app/public/colis" 2>/dev/null || true
+
+          echo "🧹 Cleaning old releases..."
+          cd "$RELEASES_DIR"
+          ls -t | tail -n +6 | xargs -r rm -rf || true
+
+          echo "✅ DEPLOYMENT SUCCESS"

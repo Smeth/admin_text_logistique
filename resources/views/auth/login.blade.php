@@ -84,6 +84,9 @@
                         Créer un compte
                     </a>
                 </p>
+                <p class="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                    Créé et propulsé par <span class="font-semibold text-indigo-600 dark:text-indigo-400">@smeth-dev</span>
+                </p>
             </div>
         </div>
     </div>

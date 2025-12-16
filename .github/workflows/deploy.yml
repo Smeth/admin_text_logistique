@@ -143,34 +143,90 @@ jobs:
 
           trap rollback ERR
 
+          echo "📁 Creating directories..."
+          mkdir -p "$RELEASES_DIR"
+          mkdir -p "$TMP_DIR"
           mkdir -p "$NEW_RELEASE"
 
           echo "📦 Extracting..."
           unzip -q "$ZIP_PATH" -d "$NEW_RELEASE"
 
+          echo "📁 Creating Laravel required directories..."
+          # Créer bootstrap/cache AVANT de définir les permissions
+          mkdir -p "$NEW_RELEASE/bootstrap/cache"
+          mkdir -p "$NEW_RELEASE/storage/framework/cache"
+          mkdir -p "$NEW_RELEASE/storage/framework/sessions"
+          mkdir -p "$NEW_RELEASE/storage/framework/views"
+          mkdir -p "$NEW_RELEASE/storage/logs"
+
           echo "🔗 Linking storage..."
           rm -rf "$NEW_RELEASE/storage"
           ln -s "$PROJECT_DIR/storage" "$NEW_RELEASE/storage"
 
-          echo "🔧 Permissions..."
-          sudo chown -R www-data:www-data "$NEW_RELEASE"
-          sudo chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache"
+          echo "🔐 Setting permissions..."
+          # Essayer sans sudo d'abord, puis avec sudo -n (non-interactif)
+          chown -R $USER:www-data "$NEW_RELEASE" 2>/dev/null || sudo -n chown -R $USER:www-data "$NEW_RELEASE" 2>/dev/null || true
+          chmod -R 755 "$NEW_RELEASE" 2>/dev/null || sudo -n chmod -R 755 "$NEW_RELEASE" 2>/dev/null || true
+          # Permissions spéciales pour les dossiers qui doivent être accessibles en écriture
+          chmod -R 775 "$NEW_RELEASE/bootstrap/cache" 2>/dev/null || sudo -n chmod -R 775 "$NEW_RELEASE/bootstrap/cache" 2>/dev/null || true
+          chmod -R 775 "$NEW_RELEASE/storage" 2>/dev/null || sudo -n chmod -R 775 "$NEW_RELEASE/storage" 2>/dev/null || true
 
-          echo "🔄 Switching release..."
+          echo "🔄 Switching symlink..."
+          if [ -e "$PROJECT_DIR/current" ]; then
+            rm -rf "$PROJECT_DIR/current"
+          fi
           ln -sfn "$NEW_RELEASE" "$PROJECT_DIR/current"
+
+          if [ ! -L "$PROJECT_DIR/current" ]; then
+            echo "❌ Error: Failed to create symlink!"
+            exit 1
+          fi
 
           echo "🚀 Running Laravel optimizations..."
           cd "$PROJECT_DIR/current"
-          php artisan optimize:clear || true
-          php artisan config:cache || true
-          php artisan route:cache || true
 
-          echo "📚 Running migrations safely..."
+          # Créer le lien symbolique public/storage
+          echo "🔗 Creating storage symlink..."
+          rm -f public/storage
+          php artisan storage:link || {
+            ln -s ../../storage/app/public public/storage || true
+          }
+
+          # Vérifier que bootstrap/cache existe et est accessible
+          if [ ! -d "bootstrap/cache" ]; then
+            echo "⚠️ Warning: bootstrap/cache does not exist, creating it..."
+            mkdir -p bootstrap/cache
+            chmod 775 bootstrap/cache 2>/dev/null || sudo -n chmod 775 bootstrap/cache || true
+          fi
+
+          # Vérifier les permissions
+          if [ ! -w "bootstrap/cache" ]; then
+            echo "⚠️ Warning: bootstrap/cache is not writable, fixing permissions..."
+            chmod 775 bootstrap/cache 2>/dev/null || sudo -n chmod 775 bootstrap/cache || true
+          fi
+
+          php artisan optimize:clear || true
+          php artisan config:cache
+          php artisan route:cache
+          php artisan view:cache || true
+
+          echo "🗄️ Running migrations..."
           php artisan migrate --force
 
-          echo "🌱 Running seeds safely..."
+          echo "🌱 Running seeds..."
           php artisan db:seed --force || true
 
+          # Finaliser les permissions pour storage
+          echo "🔐 Finalizing storage permissions..."
+          chown -R $USER:www-data "$PROJECT_DIR/storage" 2>/dev/null || sudo -n chown -R $USER:www-data "$PROJECT_DIR/storage" 2>/dev/null || true
+          chmod -R 775 "$PROJECT_DIR/storage/app/public" 2>/dev/null || sudo -n chmod -R 775 "$PROJECT_DIR/storage/app/public" 2>/dev/null || true
+          chmod -R 775 "$PROJECT_DIR/storage/app/public/colis" 2>/dev/null || sudo -n chmod -R 775 "$PROJECT_DIR/storage/app/public/colis" 2>/dev/null || true
+
+          # Nettoyer les anciennes releases (garder les 5 dernières)
+          echo "🧹 Cleaning old releases..."
+          cd "$RELEASES_DIR"
+          ls -t | tail -n +6 | xargs -r rm -rf || true
+
           echo "=============================="
-          echo " 🎉 Deployment SUCCESSFUL !!"
+          echo " ✅ DEPLOYMENT SUCCESS"
           echo "=============================="

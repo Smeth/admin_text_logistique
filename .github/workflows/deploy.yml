@@ -79,47 +79,15 @@ jobs:
           name: build
           path: ./artifact
 
-      - name: Prepare Server Directories
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.AWS_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            set -e
-            PROJECT_DIR="/var/www/livrango/admin"
-
-            echo "📁 Creating necessary directories..."
-            # Créer les dossiers sans sudo si possible, sinon avec sudo -n (non-interactif)
-            mkdir -p "$PROJECT_DIR/tmp" 2>/dev/null || sudo -n mkdir -p "$PROJECT_DIR/tmp" || {
-              echo "⚠️ Warning: Could not create tmp directory, will try during deployment"
-            }
-            mkdir -p "$PROJECT_DIR/releases" 2>/dev/null || sudo -n mkdir -p "$PROJECT_DIR/releases" || {
-              echo "⚠️ Warning: Could not create releases directory, will try during deployment"
-            }
-            mkdir -p "$PROJECT_DIR/storage/app/public/colis" 2>/dev/null || sudo -n mkdir -p "$PROJECT_DIR/storage/app/public/colis" || true
-            mkdir -p "$PROJECT_DIR/storage/logs" 2>/dev/null || sudo -n mkdir -p "$PROJECT_DIR/storage/logs" || true
-            mkdir -p "$PROJECT_DIR/storage/framework/cache" 2>/dev/null || sudo -n mkdir -p "$PROJECT_DIR/storage/framework/cache" || true
-            mkdir -p "$PROJECT_DIR/storage/framework/sessions" 2>/dev/null || sudo -n mkdir -p "$PROJECT_DIR/storage/framework/sessions" || true
-            mkdir -p "$PROJECT_DIR/storage/framework/views" 2>/dev/null || sudo -n mkdir -p "$PROJECT_DIR/storage/framework/views" || true
-
-            echo "🔐 Setting initial permissions (if sudo available)..."
-            # Essayer sans sudo d'abord, puis avec sudo -n (non-interactif)
-            chown -R $USER:www-data "$PROJECT_DIR/tmp" 2>/dev/null || sudo -n chown -R $USER:www-data "$PROJECT_DIR/tmp" 2>/dev/null || true
-            chown -R $USER:www-data "$PROJECT_DIR/releases" 2>/dev/null || sudo -n chown -R $USER:www-data "$PROJECT_DIR/releases" 2>/dev/null || true
-            chown -R $USER:www-data "$PROJECT_DIR/storage" 2>/dev/null || sudo -n chown -R $USER:www-data "$PROJECT_DIR/storage" 2>/dev/null || true
-            chmod -R 775 "$PROJECT_DIR/tmp" 2>/dev/null || sudo -n chmod -R 775 "$PROJECT_DIR/tmp" 2>/dev/null || true
-            chmod -R 775 "$PROJECT_DIR/releases" 2>/dev/null || sudo -n chmod -R 775 "$PROJECT_DIR/releases" 2>/dev/null || true
-            chmod -R 775 "$PROJECT_DIR/storage" 2>/dev/null || sudo -n chmod -R 775 "$PROJECT_DIR/storage" 2>/dev/null || true
-
       - name: Upload Artifact to Server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.AWS_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "./artifact/build.zip"
+          source: "artifact/build.zip"
           target: "/var/www/livrango/admin/tmp"
+          strip_components: 1 # <--- CORRECTION ICI (Enlève le dossier 'artifact/')
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.0
@@ -127,7 +95,6 @@ jobs:
           host: ${{ secrets.AWS_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-
           script: |
             set -e
 
@@ -145,7 +112,6 @@ jobs:
             rollback() {
               echo "❌ Rollback..."
               if [ -n "$PREVIOUS_RELEASE" ]; then
-                rm -rf "$PROJECT_DIR/current"
                 ln -sfn "$PREVIOUS_RELEASE" "$PROJECT_DIR/current"
               fi
               exit 1
@@ -153,66 +119,29 @@ jobs:
 
             trap rollback ERR
 
-            # Créer les dossiers nécessaires
-            echo "📁 Creating release directory..."
-            mkdir -p "$RELEASES_DIR" 2>/dev/null || sudo -n mkdir -p "$RELEASES_DIR" || {
-              echo "❌ Error: Cannot create releases directory"
-              exit 1
-            }
             mkdir -p "$NEW_RELEASE"
 
-            # Vérifier que le fichier ZIP existe
-            echo "🔍 Verifying artifact..."
-            if [ ! -f "$ZIP_PATH" ]; then
-              echo "❌ Error: $ZIP_PATH not found!"
-              echo "📂 Contents of $TMP_DIR:"
-              ls -la "$TMP_DIR" || echo "Directory does not exist"
-              exit 1
-            fi
-
             echo "📦 Extracting artifact..."
+            # Le fichier est maintenant bien à la racine de tmp
             unzip -q "$ZIP_PATH" -d "$NEW_RELEASE"
 
-            echo "🔗 Linking shared storage..."
+            echo "🔗 Linking shared storage & .env..."
             rm -rf "$NEW_RELEASE/storage"
             ln -s "$PROJECT_DIR/storage" "$NEW_RELEASE/storage"
 
-            echo "🔐 Setting permissions..."
-            # Essayer sans sudo d'abord, puis avec sudo -n (non-interactif)
-            chown -R $USER:www-data "$NEW_RELEASE" 2>/dev/null || sudo -n chown -R $USER:www-data "$NEW_RELEASE" 2>/dev/null || true
-            chmod -R 755 "$NEW_RELEASE" 2>/dev/null || sudo -n chmod -R 755 "$NEW_RELEASE" 2>/dev/null || true
-            chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache" 2>/dev/null || sudo -n chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache" 2>/dev/null || true
+            # AJOUT CRITIQUE : Lien vers le fichier .env
+            # Assurez-vous que /var/www/livrango/admin/.env existe sur le serveur
+            ln -s "$PROJECT_DIR/.env" "$NEW_RELEASE/.env"
+
+            echo "🔐 Permissions..."
+            sudo chown -R www-data:www-data "$NEW_RELEASE"
+            sudo chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache"
 
             echo "🔄 Switching symlink..."
-            # Supprimer l'ancien lien/dossier current s'il existe
-            if [ -e "$PROJECT_DIR/current" ]; then
-              rm -rf "$PROJECT_DIR/current"
-            fi
             ln -sfn "$NEW_RELEASE" "$PROJECT_DIR/current"
-
-            # Vérifier que le lien symbolique est correct
-            if [ ! -L "$PROJECT_DIR/current" ]; then
-              echo "❌ Error: Failed to create symlink!"
-              exit 1
-            fi
 
             echo "⚙️ Laravel optimizations..."
             cd "$PROJECT_DIR/current"
-
-            # Créer le lien symbolique public/storage
-            echo "🔗 Creating storage symlink..."
-            rm -f public/storage
-            php artisan storage:link || {
-              # Fallback si storage:link échoue
-              ln -s ../../storage/app/public public/storage || true
-            }
-
-            # Vérifier que le lien existe
-            if [ ! -L "public/storage" ]; then
-              echo "⚠️ Warning: public/storage symlink not created, trying manual method..."
-              ln -sfn "$PROJECT_DIR/storage/app/public" public/storage
-            fi
-
             php artisan optimize:clear
             php artisan view:clear
             php artisan config:cache
@@ -224,15 +153,7 @@ jobs:
             echo "🌱 Seeds..."
             php artisan db:seed --force || true
 
-            # Finaliser les permissions pour storage
-            echo "🔐 Finalizing storage permissions..."
-            chown -R $USER:www-data "$PROJECT_DIR/storage" 2>/dev/null || sudo -n chown -R $USER:www-data "$PROJECT_DIR/storage" 2>/dev/null || true
-            chmod -R 775 "$PROJECT_DIR/storage/app/public" 2>/dev/null || sudo -n chmod -R 775 "$PROJECT_DIR/storage/app/public" 2>/dev/null || true
-            chmod -R 775 "$PROJECT_DIR/storage/app/public/colis" 2>/dev/null || sudo -n chmod -R 775 "$PROJECT_DIR/storage/app/public/colis" 2>/dev/null || true
-
-            # Nettoyer les anciennes releases (garder les 5 dernières)
-            echo "🧹 Cleaning old releases..."
-            cd "$RELEASES_DIR"
-            ls -t | tail -n +6 | xargs -r rm -rf || true
+            echo "🧹 Cleaning up..."
+            rm -f "$ZIP_PATH"
 
             echo "✅ DEPLOYMENT SUCCESS"

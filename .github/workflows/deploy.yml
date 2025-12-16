@@ -32,7 +32,7 @@ jobs:
       run: composer install --no-dev --prefer-dist --optimize-autoloader
 
     # ------------------------------------------
-    # CLEAR ALL LARAVEL CACHES BEFORE PACKAGING
+    # CLEAR CACHES BEFORE PACKAGING
     # ------------------------------------------
     - name: Clear Laravel caches BEFORE packaging
       run: |
@@ -90,7 +90,7 @@ jobs:
         path: ./artifact
 
     # ------------------------------------------
-    # PUSH TO SERVER — FIXED DESTINATION
+    # PUSH TO SERVER — AS YOU HAD IT
     # ------------------------------------------
     - name: Upload Artifact via SCP
       uses: appleboy/scp-action@v0.1.7
@@ -98,11 +98,11 @@ jobs:
         host: ${{ secrets.AWS_HOST }}
         username: ${{ secrets.SSH_USERNAME }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
-        source: "./artifact/build.zip"
+        source: "./artifact"
         target: "/var/www/livrango/admin/tmp/build.zip"
 
     # ------------------------------------------
-    # DEPLOY SCRIPT WITH SAFE MIGRATIONS + FIXES
+    # DEPLOY SCRIPT — FIX CACHE DIRECTORY ERROR
     # ------------------------------------------
     - name: Deploy via SSH
       uses: appleboy/ssh-action@v1.0.0
@@ -117,7 +117,7 @@ jobs:
           PROJECT_DIR="/var/www/livrango/admin"
           RELEASES_DIR="$PROJECT_DIR/releases"
           TMP_DIR="$PROJECT_DIR/tmp"
-          ZIP_PATH="$TMP_DIR/build.zip"
+          ZIP_PATH="$TMP_DIR/build.zip/artifact/build.zip"   # ← Ton chemin conservé à 100%
 
           RELEASE_NAME=$(date +%Y%m%d_%H%M%S)
           NEW_RELEASE="$RELEASES_DIR/$RELEASE_NAME"
@@ -148,7 +148,7 @@ jobs:
           echo "📦 Extracting..."
           unzip -q "$ZIP_PATH" -d "$NEW_RELEASE"
 
-          echo "📁 Ensuring Laravel mandatory directories exist..."
+          echo "📁 Ensuring Laravel folders exist..."
           mkdir -p "$NEW_RELEASE/bootstrap/cache"
           mkdir -p "$NEW_RELEASE/storage/framework/cache"
           mkdir -p "$NEW_RELEASE/storage/framework/sessions"
@@ -158,25 +158,4 @@ jobs:
           rm -rf "$NEW_RELEASE/storage"
           ln -s "$PROJECT_DIR/storage" "$NEW_RELEASE/storage"
 
-          echo "🔧 Permissions..."
-          sudo chown -R www-data:www-data "$NEW_RELEASE"
-          sudo chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache"
-
-          echo "🔄 Switching release..."
-          ln -sfn "$NEW_RELEASE" "$PROJECT_DIR/current"
-
-          echo "🚀 Running Laravel optimizations..."
-          cd "$PROJECT_DIR/current"
-          php artisan optimize:clear || true
-          php artisan config:cache || true
-          php artisan route:cache || true
-
-          echo "📚 Running migrations safely..."
-          php artisan migrate --force
-
-          echo "🌱 Running seeds safely..."
-          php artisan db:seed --force || true
-
-          echo "=============================="
-          echo " 🎉 Deployment SUCCESSFUL !!"
-          echo "=============================="
+          echo "🔧 Per

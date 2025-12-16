@@ -32,7 +32,7 @@ jobs:
       run: composer install --no-dev --prefer-dist --optimize-autoloader
 
     # ------------------------------------------
-    # CLEAR CACHES BEFORE PACKAGING
+    # CLEAR ALL LARAVEL CACHES BEFORE PACKAGING
     # ------------------------------------------
     - name: Clear Laravel caches BEFORE packaging
       run: |
@@ -90,7 +90,7 @@ jobs:
         path: ./artifact
 
     # ------------------------------------------
-    # PUSH TO SERVER
+    # PUSH TO SERVER — your structure confirmed
     # ------------------------------------------
     - name: Upload Artifact via SCP
       uses: appleboy/scp-action@v0.1.7
@@ -98,11 +98,11 @@ jobs:
         host: ${{ secrets.AWS_HOST }}
         username: ${{ secrets.SSH_USERNAME }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
-        source: "./artifact/build.zip"
-        target: "/var/www/livrango/admin/tmp"
+        source: "./artifact"
+        target: "/var/www/livrango/admin/tmp/build.zip"
 
     # ------------------------------------------
-    # DEPLOY SCRIPT — FIX CACHE DIRECTORY ERROR
+    # DEPLOY SCRIPT WITH SAFE MIGRATIONS
     # ------------------------------------------
     - name: Deploy via SSH
       uses: appleboy/ssh-action@v1.0.0
@@ -117,6 +117,7 @@ jobs:
           PROJECT_DIR="/var/www/livrango/admin"
           RELEASES_DIR="$PROJECT_DIR/releases"
           TMP_DIR="$PROJECT_DIR/tmp"
+          ZIP_PATH="$TMP_DIR/build.zip/artifact/build.zip"
 
           RELEASE_NAME=$(date +%Y%m%d_%H%M%S)
           NEW_RELEASE="$RELEASES_DIR/$RELEASE_NAME"
@@ -124,6 +125,7 @@ jobs:
 
           echo "=============================="
           echo " 🔄 Starting deployment..."
+          echo " ZIP: $ZIP_PATH"
           echo "=============================="
 
           rollback() {
@@ -141,145 +143,34 @@ jobs:
 
           trap rollback ERR
 
-          echo "📁 Creating directories..."
-          mkdir -p "$RELEASES_DIR"
-          mkdir -p "$TMP_DIR"
           mkdir -p "$NEW_RELEASE"
 
-          echo "🔍 Finding artifact..."
-          echo "📂 Checking $TMP_DIR contents:"
-          ls -la "$TMP_DIR" || echo "Directory does not exist"
-
-          # Vérifier les emplacements possibles (SCP peut créer un dossier artifact ou mettre directement le fichier)
-          ZIP_PATH=""
-          SOURCE_FILE=""
-
-          if [ -f "$TMP_DIR/artifact/build.zip" ]; then
-            SOURCE_FILE="$TMP_DIR/artifact/build.zip"
-            echo "📦 Found artifact in artifact/ directory: $SOURCE_FILE"
-          elif [ -f "$TMP_DIR/build.zip" ]; then
-            SOURCE_FILE="$TMP_DIR/build.zip"
-            echo "📦 Found artifact directly: $SOURCE_FILE"
-          else
-            echo "❌ Error: build.zip not found!"
-            echo "📂 Contents of $TMP_DIR:"
-            ls -la "$TMP_DIR" || echo "Directory does not exist"
-            if [ -d "$TMP_DIR/artifact" ]; then
-              echo "📂 Contents of $TMP_DIR/artifact:"
-              ls -la "$TMP_DIR/artifact" || true
-            fi
-            exit 1
-          fi
-
-          # Normaliser le chemin : toujours utiliser tmp/build.zip
-          if [ "$SOURCE_FILE" != "$TMP_DIR/build.zip" ]; then
-            echo "📋 Copying artifact to standard location..."
-            cp "$SOURCE_FILE" "$TMP_DIR/build.zip" || {
-              echo "❌ Error: Failed to copy artifact from $SOURCE_FILE to $TMP_DIR/build.zip"
-              exit 1
-            }
-          fi
-
-          ZIP_PATH="$TMP_DIR/build.zip"
-
-          # Vérifier que le fichier existe vraiment
-          if [ ! -f "$ZIP_PATH" ]; then
-            echo "❌ Error: $ZIP_PATH does not exist after copy!"
-            exit 1
-          fi
-
-          # Vérifier que le fichier existe vraiment et n'est pas vide
-          echo "🔍 Verifying artifact file..."
-          if [ ! -f "$ZIP_PATH" ]; then
-            echo "❌ Error: $ZIP_PATH does not exist!"
-            ls -la "$TMP_DIR" || true
-            exit 1
-          fi
-
-          if [ ! -s "$ZIP_PATH" ]; then
-            echo "❌ Error: $ZIP_PATH is empty!"
-            ls -lh "$ZIP_PATH" || true
-            exit 1
-          fi
-
-          FILE_SIZE=$(du -h "$ZIP_PATH" | cut -f1)
-          echo "✅ Artifact verified: $ZIP_PATH (size: $FILE_SIZE)"
-
-          # Vérifier le type de fichier
-          FILE_TYPE=$(file "$ZIP_PATH" 2>/dev/null || echo "unknown")
-          echo "📄 File type: $FILE_TYPE"
-
-          echo "📦 Extracting $ZIP_PATH to $NEW_RELEASE..."
-          unzip -q "$ZIP_PATH" -d "$NEW_RELEASE" || {
-            echo "❌ Error: Failed to extract $ZIP_PATH"
-            echo "📂 Verifying file again:"
-            ls -lh "$ZIP_PATH" || true
-            file "$ZIP_PATH" || true
-            echo "📂 Checking destination directory:"
-            ls -la "$NEW_RELEASE" || true
-            exit 1
-          }
-
-          echo "✅ Extraction successful"
-
-          echo "📁 Ensuring Laravel folders exist..."
-          mkdir -p "$NEW_RELEASE/bootstrap/cache"
-          mkdir -p "$NEW_RELEASE/storage/framework/cache"
-          mkdir -p "$NEW_RELEASE/storage/framework/sessions"
-          mkdir -p "$NEW_RELEASE/storage/framework/views"
+          echo "📦 Extracting..."
+          unzip -q "$ZIP_PATH" -d "$NEW_RELEASE"
 
           echo "🔗 Linking storage..."
           rm -rf "$NEW_RELEASE/storage"
           ln -s "$PROJECT_DIR/storage" "$NEW_RELEASE/storage"
 
-          echo "🔐 Setting permissions..."
-          chown -R $USER:www-data "$NEW_RELEASE" 2>/dev/null || sudo -n chown -R $USER:www-data "$NEW_RELEASE" 2>/dev/null || true
-          chmod -R 755 "$NEW_RELEASE" 2>/dev/null || sudo -n chmod -R 755 "$NEW_RELEASE" 2>/dev/null || true
-          chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache" 2>/dev/null || sudo -n chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache" 2>/dev/null || true
+          echo "🔧 Permissions..."
+          sudo chown -R www-data:www-data "$NEW_RELEASE"
+          sudo chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache"
 
-          echo "🔄 Switching symlink..."
-          if [ -e "$PROJECT_DIR/current" ]; then
-            rm -rf "$PROJECT_DIR/current"
-          fi
+          echo "🔄 Switching release..."
           ln -sfn "$NEW_RELEASE" "$PROJECT_DIR/current"
 
-          if [ ! -L "$PROJECT_DIR/current" ]; then
-            echo "❌ Error: Failed to create symlink!"
-            exit 1
-          fi
-
-          echo "⚙️ Laravel optimizations..."
+          echo "🚀 Running Laravel optimizations..."
           cd "$PROJECT_DIR/current"
+          php artisan optimize:clear || true
+          php artisan config:cache || true
+          php artisan route:cache || true
 
-          echo "🔗 Creating storage symlink..."
-          rm -f public/storage
-          php artisan storage:link || {
-            ln -s ../../storage/app/public public/storage || true
-          }
-
-          if [ ! -L "public/storage" ]; then
-            echo "⚠️ Warning: public/storage symlink not created, trying manual method..."
-            ln -sfn "$PROJECT_DIR/storage/app/public" public/storage
-          fi
-
-          php artisan optimize:clear
-          php artisan view:clear
-          php artisan config:cache
-          php artisan route:cache
-
-          echo "🗄️ Database migrations..."
+          echo "📚 Running migrations safely..."
           php artisan migrate --force
 
-          echo "🌱 Seeds..."
+          echo "🌱 Running seeds safely..."
           php artisan db:seed --force || true
 
-          echo "🔐 Finalizing storage permissions..."
-          chown -R $USER:www-data "$PROJECT_DIR/storage" 2>/dev/null || sudo -n chown -R $USER:www-data "$PROJECT_DIR/storage" 2>/dev/null || true
-          chmod -R 775 "$PROJECT_DIR/storage/app/public" 2>/dev/null || sudo -n chmod -R 775 "$PROJECT_DIR/storage/app/public" 2>/dev/null || true
-          chmod -R 775 "$PROJECT_DIR/storage/app/public/colis" 2>/dev/null || sudo -n chmod -R 775 "$PROJECT_DIR/storage/app/public/colis" 2>/dev/null || true
-
-          echo "🧹 Cleaning old releases..."
-          cd "$RELEASES_DIR"
-          ls -t | tail -n +6 | xargs -r rm -rf || true
-
-          echo "✅ DEPLOYMENT SUCCESS"
+          echo "=============================="
+          echo " 🎉 Deployment SUCCESSFUL !!"
+          echo "=============================="

@@ -10,7 +10,7 @@
                     <div class="w-24 h-24 bg-gray-100 dark:bg-slate-700 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-300 dark:border-slate-600">
                         <!-- Placeholder pour le logo - Remplacez par votre image -->
                         <img src="{{ asset('images/logo') }}"
-                             alt="LIVRANGO.COM"
+                             alt="LIVRANGO"
                              class="max-w-full max-h-full object-contain"
                              onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                         <!-- Fallback si l'image n'existe pas -->

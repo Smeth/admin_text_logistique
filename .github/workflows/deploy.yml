@@ -157,13 +157,22 @@ jobs:
           sudo chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache"
 
           echo "🔄 Switching release..."
+          # Supprimer current s'il existe (lien ou dossier) pour éviter les conflits
+          if [ -e "$PROJECT_DIR/current" ]; then
+            rm -rf "$PROJECT_DIR/current"
+          fi
+          # Créer le nouveau lien symbolique vers la nouvelle release
           ln -sfn "$NEW_RELEASE" "$PROJECT_DIR/current"
+          echo "✅ Current now points to: $NEW_RELEASE"
 
           echo "🚀 Running Laravel optimizations..."
           cd "$PROJECT_DIR/current"
           php artisan optimize:clear || true
           php artisan config:cache || true
           php artisan route:cache || true
+          
+          echo "🔗 Creating Laravel storage link..."
+          php artisan storage:link || true
 
           echo "📚 Running migrations safely..."
           php artisan migrate --force

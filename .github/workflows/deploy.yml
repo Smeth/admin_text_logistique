@@ -8,64 +8,70 @@ on:
 jobs:
 
   ###############################################
-  # 1) BUILD JOB (GitHub Runner)
+  # 1) BUILD JOB — executed on GitHub Runner
   ###############################################
   build:
     name: Build Laravel Project
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
-      # ---------- PHP ----------
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          extensions: bcmath, pdo_mysql, mbstring, zip, tokenizer
-          coverage: none
+    # ------------------------------------------
+    # PHP SETUP
+    # ------------------------------------------
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.3'
+        extensions: bcmath, pdo_mysql, mbstring, zip, tokenizer
+        coverage: none
 
-      - name: Install Composer Dependencies
-        run: composer install --no-dev --prefer-dist --optimize-autoloader
+    - name: Install Composer Dependencies
+      run: composer install --no-dev --prefer-dist --optimize-autoloader
 
-      - name: Clear Laravel caches
-        run: |
-          php artisan optimize:clear || true
-          rm -rf bootstrap/cache/*.php || true
+    # ------------------------------------------
+    # CLEAR ALL LARAVEL CACHES BEFORE PACKAGING
+    # ------------------------------------------
+    - name: Clear Laravel caches BEFORE packaging
+      run: |
+        php artisan optimize:clear || true
+        rm -rf bootstrap/cache/*.php || true
 
-      # ---------- NODE ----------
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
+    # ------------------------------------------
+    # NODE BUILD
+    # ------------------------------------------
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: package-lock.json
 
-      - name: Install NPM Dependencies
-        run: npm ci
+    - name: Install NPM Dependencies
+      run: npm ci
 
-      - name: Clean & Build Frontend Assets
-        run: |
-          rm -rf public/build
-          npm run build
+    - name: Build Frontend Assets
+      run: npm run build
 
-      # ---------- ZIP ----------
-      - name: Create Deployment Artifact
-        run: |
-          mkdir -p artifact
-          zip -r artifact/build.zip \
-            app bootstrap config database public resources routes vendor \
-            artisan composer.json composer.lock \
-            package.json package-lock.json vite.config.js
+    # ------------------------------------------
+    # ZIP ARTIFACT
+    # ------------------------------------------
+    - name: Prepare Deployment Artifact
+      run: |
+        mkdir -p artifact
+        zip -r artifact/build.zip . -x "*.git*" "artifact/*"
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: build
-          path: artifact/build.zip
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: build
+        path: artifact/build.zip
+
 
   ###############################################
-  # 2) DEPLOY JOB (SSH)
+  # 2) DEPLOY JOB — executed via SSH on your server
   ###############################################
   deploy:
     name: Deploy to Production Server
@@ -73,87 +79,98 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: build
-          path: ./artifact
 
-      - name: Upload Artifact to Server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.AWS_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "artifact/build.zip"
-          target: "/var/www/livrango/admin/tmp"
-          strip_components: 1 # <--- CORRECTION ICI (Enlève le dossier 'artifact/')
+    # ------------------------------------------
+    # DOWNLOAD ARTIFACT
+    # ------------------------------------------
+    - name: Download Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: build
+        path: ./artifact
 
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.AWS_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            set -e
+    # ------------------------------------------
+    # PUSH TO SERVER — your structure confirmed
+    # ------------------------------------------
+    - name: Upload Artifact via SCP
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.AWS_HOST }}
+        username: ${{ secrets.SSH_USERNAME }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        source: "./artifact"
+        target: "/var/www/livrango/admin/tmp/build.zip"
 
-            PROJECT_DIR="/var/www/livrango/admin"
-            RELEASES_DIR="$PROJECT_DIR/releases"
-            TMP_DIR="$PROJECT_DIR/tmp"
-            ZIP_PATH="$TMP_DIR/build.zip"
+    # ------------------------------------------
+    # DEPLOY SCRIPT WITH SAFE MIGRATIONS
+    # ------------------------------------------
+    - name: Deploy via SSH
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.AWS_HOST }}
+        username: ${{ secrets.SSH_USERNAME }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-            RELEASE_NAME=$(date +%Y%m%d_%H%M%S)
-            NEW_RELEASE="$RELEASES_DIR/$RELEASE_NAME"
-            PREVIOUS_RELEASE=$(readlink "$PROJECT_DIR/current" || echo "")
+        script: |
+          set -e
 
-            echo "🚀 Deploying release $RELEASE_NAME"
+          PROJECT_DIR="/var/www/livrango/admin"
+          RELEASES_DIR="$PROJECT_DIR/releases"
+          TMP_DIR="$PROJECT_DIR/tmp"
+          ZIP_PATH="$TMP_DIR/build.zip/artifact/build.zip"
 
-            rollback() {
-              echo "❌ Rollback..."
-              if [ -n "$PREVIOUS_RELEASE" ]; then
-                ln -sfn "$PREVIOUS_RELEASE" "$PROJECT_DIR/current"
-              fi
-              exit 1
-            }
+          RELEASE_NAME=$(date +%Y%m%d_%H%M%S)
+          NEW_RELEASE="$RELEASES_DIR/$RELEASE_NAME"
+          PREVIOUS_RELEASE=$(readlink "$PROJECT_DIR/current" || echo "")
 
-            trap rollback ERR
+          echo "=============================="
+          echo " 🔄 Starting deployment..."
+          echo " ZIP: $ZIP_PATH"
+          echo "=============================="
 
-            mkdir -p "$NEW_RELEASE"
+          rollback() {
+            echo "❌ Error detected — Rolling back..."
 
-            echo "📦 Extracting artifact..."
-            # Le fichier est maintenant bien à la racine de tmp
-            unzip -q "$ZIP_PATH" -d "$NEW_RELEASE"
+            if [ -n "$PREVIOUS_RELEASE" ]; then
+              ln -sfn "$PREVIOUS_RELEASE" "$PROJECT_DIR/current"
+              echo "Rollback done ✔"
+            else
+              echo "No previous release to restore ❗"
+            fi
 
-            echo "🔗 Linking shared storage & .env..."
-            rm -rf "$NEW_RELEASE/storage"
-            ln -s "$PROJECT_DIR/storage" "$NEW_RELEASE/storage"
+            exit 1
+          }
 
-            # AJOUT CRITIQUE : Lien vers le fichier .env
-            # Assurez-vous que /var/www/livrango/admin/.env existe sur le serveur
-            ln -s "$PROJECT_DIR/.env" "$NEW_RELEASE/.env"
+          trap rollback ERR
 
-            echo "🔐 Permissions..."
-            sudo chown -R www-data:www-data "$NEW_RELEASE"
-            sudo chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache"
+          mkdir -p "$NEW_RELEASE"
 
-            echo "🔄 Switching symlink..."
-            ln -sfn "$NEW_RELEASE" "$PROJECT_DIR/current"
+          echo "📦 Extracting..."
+          unzip -q "$ZIP_PATH" -d "$NEW_RELEASE"
 
-            echo "⚙️ Laravel optimizations..."
-            cd "$PROJECT_DIR/current"
-            php artisan optimize:clear
-            php artisan view:clear
-            php artisan config:cache
-            php artisan route:cache
+          echo "🔗 Linking storage..."
+          rm -rf "$NEW_RELEASE/storage"
+          ln -s "$PROJECT_DIR/storage" "$NEW_RELEASE/storage"
 
-            echo "🗄️ Database migrations..."
-            php artisan migrate --force
+          echo "🔧 Permissions..."
+          sudo chown -R www-data:www-data "$NEW_RELEASE"
+          sudo chmod -R 775 "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache"
 
-            echo "🌱 Seeds..."
-            php artisan db:seed --force || true
+          echo "🔄 Switching release..."
+          ln -sfn "$NEW_RELEASE" "$PROJECT_DIR/current"
 
-            echo "🧹 Cleaning up..."
-            rm -f "$ZIP_PATH"
+          echo "🚀 Running Laravel optimizations..."
+          cd "$PROJECT_DIR/current"
+          php artisan optimize:clear || true
+          php artisan config:cache || true
+          php artisan route:cache || true
 
-            echo "✅ DEPLOYMENT SUCCESS"
+          echo "📚 Running migrations safely..."
+          php artisan migrate --force
+
+          echo "🌱 Running seeds safely..."
+          php artisan db:seed --force || true
+
+          echo "=============================="
+          echo " 🎉 Deployment SUCCESSFUL !!"
+          echo "=============================="

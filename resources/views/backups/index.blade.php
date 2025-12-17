@@ -24,6 +24,12 @@
         </div>
     @endif
 
+    @if(session('warning'))
+        <div class="mb-4 p-4 bg-orange-100 dark:bg-orange-900/30 border border-orange-400 dark:border-orange-700 text-orange-700 dark:text-orange-400 rounded-lg">
+            ⚠️ {{ session('warning') }}
+        </div>
+    @endif
+
     <!-- Formulaire de restauration -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 p-6 mb-6">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Restaurer une sauvegarde</h2>

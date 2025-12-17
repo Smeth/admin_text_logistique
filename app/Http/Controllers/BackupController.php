@@ -158,32 +158,77 @@ class BackupController extends Controller
      */
     private function prepareSqlForRestore($sql)
     {
-        // Supprimer toutes les commandes CREATE TABLE (structure)
-        // On veut seulement restaurer les données (INSERT)
-        $sql = preg_replace(
-            '/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[^;]+;/i',
-            '',
-            $sql
-        );
+        // Diviser le SQL en lignes pour mieux le traiter
+        $lines = explode("\n", $sql);
+        $filteredLines = [];
+        $inCreateTable = false;
+        $inInsert = false;
+        $insertBuffer = '';
         
-        // Supprimer les DROP TABLE IF EXISTS
-        $sql = preg_replace(
-            '/DROP\s+TABLE\s+IF\s+EXISTS\s+[^;]+;/i',
-            '',
-            $sql
-        );
+        foreach ($lines as $line) {
+            $trimmedLine = trim($line);
+            
+            // Ignorer les commentaires
+            if (empty($trimmedLine) || preg_match('/^--/', $trimmedLine) || preg_match('/^\/\*/', $trimmedLine)) {
+                continue;
+            }
+            
+            // Détecter le début d'un CREATE TABLE
+            if (preg_match('/CREATE\s+TABLE\s+/i', $trimmedLine)) {
+                $inCreateTable = true;
+                continue;
+            }
+            
+            // Si on est dans un CREATE TABLE, ignorer jusqu'à la fin (;)
+            if ($inCreateTable) {
+                if (strpos($trimmedLine, ';') !== false) {
+                    $inCreateTable = false;
+                }
+                continue;
+            }
+            
+            // Ignorer les DROP TABLE
+            if (preg_match('/DROP\s+TABLE/i', $trimmedLine)) {
+                continue;
+            }
+            
+            // Ignorer les SET FOREIGN_KEY_CHECKS (on les gère nous-mêmes)
+            if (preg_match('/SET\s+FOREIGN_KEY_CHECKS/i', $trimmedLine)) {
+                continue;
+            }
+            
+            // Détecter les INSERT (peuvent être sur plusieurs lignes)
+            if (preg_match('/INSERT\s+INTO/i', $trimmedLine)) {
+                $inInsert = true;
+                $insertBuffer = $trimmedLine;
+                // Si l'INSERT se termine sur la même ligne
+                if (strpos($trimmedLine, ';') !== false) {
+                    $filteredLines[] = $insertBuffer;
+                    $insertBuffer = '';
+                    $inInsert = false;
+                }
+                continue;
+            }
+            
+            // Continuer à collecter l'INSERT si on est dedans
+            if ($inInsert) {
+                $insertBuffer .= ' ' . $trimmedLine;
+                // Si on trouve un point-virgule, c'est la fin de l'INSERT
+                if (strpos($trimmedLine, ';') !== false) {
+                    $filteredLines[] = $insertBuffer;
+                    $insertBuffer = '';
+                    $inInsert = false;
+                }
+                continue;
+            }
+        }
         
-        // Supprimer les SET FOREIGN_KEY_CHECKS (on les gère nous-mêmes)
-        $sql = preg_replace(
-            '/SET\s+FOREIGN_KEY_CHECKS\s*=\s*[01];/i',
-            '',
-            $sql
-        );
+        // Ajouter le dernier INSERT s'il n'a pas été terminé
+        if (!empty($insertBuffer)) {
+            $filteredLines[] = $insertBuffer;
+        }
         
-        // Nettoyer les lignes vides multiples
-        $sql = preg_replace('/\n\s*\n\s*\n/', "\n\n", $sql);
-        
-        return $sql;
+        return implode("\n", $filteredLines);
     }
 
     public function restoreFromFile($filename)
@@ -223,6 +268,12 @@ class BackupController extends Controller
                     ->with('error', 'Le fichier de sauvegarde ne contient pas de données à restaurer (seulement la structure).');
             }
 
+            // Vérifier qu'il y a bien des INSERT dans le SQL filtré
+            if (!preg_match('/INSERT\s+INTO/i', $sql)) {
+                return redirect()->route('backups.index')
+                    ->with('error', 'Aucune donnée INSERT trouvée dans le fichier de sauvegarde après filtrage.');
+            }
+
             // Désactiver temporairement les vérifications de clés étrangères
             \DB::statement('SET FOREIGN_KEY_CHECKS=0;');
             
@@ -230,23 +281,55 @@ class BackupController extends Controller
             $queries = array_filter(
                 array_map('trim', explode(';', $sql)),
                 function($query) {
+                    $query = trim($query);
                     return !empty($query) && 
                            !preg_match('/^--/', $query) && 
-                           !preg_match('/^\/\*/', $query);
+                           !preg_match('/^\/\*/', $query) &&
+                           preg_match('/INSERT\s+INTO/i', $query); // Ne garder que les INSERT
                 }
             );
 
+            if (empty($queries)) {
+                \DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+                return redirect()->route('backups.index')
+                    ->with('error', 'Aucune requête INSERT valide trouvée dans le fichier de sauvegarde.');
+            }
+
+            $insertedCount = 0;
+            $errorCount = 0;
+            $errors = [];
+
             try {
-                foreach ($queries as $query) {
+                foreach ($queries as $index => $query) {
                     if (!empty(trim($query))) {
-                        \DB::unprepared($query);
+                        try {
+                            \DB::unprepared($query);
+                            $insertedCount++;
+                        } catch (\Exception $e) {
+                            $errorCount++;
+                            $errors[] = "Erreur à la requête " . ($index + 1) . ": " . $e->getMessage();
+                            // Continuer avec les autres requêtes même en cas d'erreur
+                        }
                     }
                 }
-                $restoreSuccess = true;
+                
+                if ($insertedCount === 0 && $errorCount > 0) {
+                    \DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+                    return redirect()->route('backups.index')
+                        ->with('error', 'Aucune donnée n\'a pu être restaurée. Erreurs: ' . implode(' | ', array_slice($errors, 0, 5)));
+                }
+                
+                if ($errorCount > 0) {
+                    // Afficher un avertissement mais continuer
+                    \DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+                    return redirect()->route('backups.index')
+                        ->with('warning', "Restauration partielle : {$insertedCount} requêtes réussies, {$errorCount} erreurs. " . implode(' | ', array_slice($errors, 0, 3)));
+                }
+                
             } catch (\Exception $e) {
                 \DB::statement('SET FOREIGN_KEY_CHECKS=1;');
                 return redirect()->route('backups.index')
-                    ->with('error', 'Erreur lors de la restauration : ' . $e->getMessage());
+                    ->with('error', 'Erreur lors de la restauration : ' . $e->getMessage() . ' (Inséré: ' . $insertedCount . ' requêtes)');
             }
 
             // Réactiver les vérifications de clés étrangères
@@ -308,6 +391,13 @@ class BackupController extends Controller
                     ->with('error', 'Le fichier de sauvegarde ne contient pas de données à restaurer (seulement la structure).');
             }
 
+            // Vérifier qu'il y a bien des INSERT dans le SQL filtré
+            if (!preg_match('/INSERT\s+INTO/i', $sql)) {
+                Storage::delete($path);
+                return redirect()->route('backups.index')
+                    ->with('error', 'Aucune donnée INSERT trouvée dans le fichier de sauvegarde après filtrage.');
+            }
+
             // Désactiver temporairement les vérifications de clés étrangères
             \DB::statement('SET FOREIGN_KEY_CHECKS=0;');
             
@@ -315,24 +405,59 @@ class BackupController extends Controller
             $queries = array_filter(
                 array_map('trim', explode(';', $sql)),
                 function($query) {
+                    $query = trim($query);
                     return !empty($query) && 
                            !preg_match('/^--/', $query) && 
-                           !preg_match('/^\/\*/', $query);
+                           !preg_match('/^\/\*/', $query) &&
+                           preg_match('/INSERT\s+INTO/i', $query); // Ne garder que les INSERT
                 }
             );
 
+            if (empty($queries)) {
+                \DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+                Storage::delete($path);
+                return redirect()->route('backups.index')
+                    ->with('error', 'Aucune requête INSERT valide trouvée dans le fichier de sauvegarde.');
+            }
+
+            $insertedCount = 0;
+            $errorCount = 0;
+            $errors = [];
+
             try {
-                foreach ($queries as $query) {
+                foreach ($queries as $index => $query) {
                     if (!empty(trim($query))) {
-                        \DB::unprepared($query);
+                        try {
+                            \DB::unprepared($query);
+                            $insertedCount++;
+                        } catch (\Exception $e) {
+                            $errorCount++;
+                            $errors[] = "Erreur à la requête " . ($index + 1) . ": " . $e->getMessage();
+                            // Continuer avec les autres requêtes même en cas d'erreur
+                        }
                     }
                 }
-                $restoreSuccess = true;
+                
+                if ($insertedCount === 0 && $errorCount > 0) {
+                    \DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+                    Storage::delete($path);
+                    return redirect()->route('backups.index')
+                        ->with('error', 'Aucune donnée n\'a pu être restaurée. Erreurs: ' . implode(' | ', array_slice($errors, 0, 5)));
+                }
+                
+                if ($errorCount > 0) {
+                    // Afficher un avertissement mais continuer
+                    \DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+                    Storage::delete($path);
+                    return redirect()->route('backups.index')
+                        ->with('warning', "Restauration partielle : {$insertedCount} requêtes réussies, {$errorCount} erreurs. " . implode(' | ', array_slice($errors, 0, 3)));
+                }
+                
             } catch (\Exception $e) {
                 \DB::statement('SET FOREIGN_KEY_CHECKS=1;');
                 Storage::delete($path);
                 return redirect()->route('backups.index')
-                    ->with('error', 'Erreur lors de la restauration : ' . $e->getMessage());
+                    ->with('error', 'Erreur lors de la restauration : ' . $e->getMessage() . ' (Inséré: ' . $insertedCount . ' requêtes)');
             }
 
             // Réactiver les vérifications de clés étrangères

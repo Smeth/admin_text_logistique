@@ -1,8 +1,8 @@
-name: Deploy Livrango Admin
+name: Deploy Livrango Admin via FTP
 
 on:
   push:
-    branches: [ master ] # Déclenchement automatique sur le push main
+    branches: [ master ]
 
 jobs:
   deploy:
@@ -12,17 +12,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 1. Préparer PHP et Composer (Sur GitHub)
+      # 1. Configuration de PHP 8.3 (Aligné sur votre serveur LWS)
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: mbstring, bcmath, gd, zip, dom
+          extensions: mbstring, bcmath, gd, zip, dom, mysql
+          coverage: none
 
+      # 2. Installation des dépendances PHP
       - name: Install Composer Dependencies
         run: composer install --no-dev --optimize-autoloader --no-interaction --no-progress
 
-      # 2. Préparer les assets JS/CSS (Sur GitHub)
+      # 3. Compilation des Assets (Vite / Tailwind)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -33,35 +35,24 @@ jobs:
           npm install
           npm run build
 
-      # 3. Synchronisation des fichiers vers LWS (Rsync)
-      - name: Sync files to Server
-        uses: Burnett01/rsync-deployments@7.0.0
+      # 4. Déploiement via FTP vers LWS
+      - name: 🚀 Sync files via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          switches: -avzr --delete
-          path: .
-          remote_host: ${{ secrets.SSH_HOST }}
-          remote_user: ${{ secrets.SSH_USER }}
-          remote_key: ${{ secrets.SSH_PRIVATE_KEY }}
-          remote_path: /home/c2717036c/livrango/admin/admin_text_logistique
-          # IMPORTANT : On ignore les fichiers locaux qui ne doivent pas écraser le serveur
-          args: --exclude=.env --exclude=/storage --exclude=.git --exclude=.github --exclude=node_modules
-
-      # 4. Exécution des commandes Laravel (Sur LWS)
-      - name: Post-deployment Commands
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY_LWS }}
-          script: |
-            cd /home/c2717036c/livrango/admin/admin_text_logistique
-
-            # Correction des droits pour éviter les erreurs 500
-            chmod -R 775 storage bootstrap/cache
-
-            # Nettoyage et optimisation du cache
-            php artisan migrate --force
-            php artisan optimize:clear
-            php artisan config:cache
-            php artisan route:cache
-            php artisan view:cache
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          # On déploie tout le contenu du dossier actuel
+          local-dir: ./
+          # Puisque votre FTP arrive déjà dans /admin_text_logistique/
+          server-dir: ./
+          # Liste d'exclusion pour protéger vos images et votre config serveur
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            storage/**
+            .env
+            tests/**
+            README.md
+            .phpunit.result.cache

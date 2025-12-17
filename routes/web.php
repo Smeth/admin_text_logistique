@@ -95,6 +95,7 @@ Route::middleware('auth')->group(function () {
             Route::post('/', [\App\Http\Controllers\BackupController::class, 'create'])->name('create');
             Route::get('/{filename}/download', [\App\Http\Controllers\BackupController::class, 'download'])->name('download');
             Route::post('/restore', [\App\Http\Controllers\BackupController::class, 'restore'])->name('restore');
+            Route::post('/{filename}/restore', [\App\Http\Controllers\BackupController::class, 'restoreFromFile'])->name('restore-file');
             Route::delete('/{filename}', [\App\Http\Controllers\BackupController::class, 'destroy'])->name('destroy');
         });
 

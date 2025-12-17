@@ -1,232 +1,67 @@
-name: CI/CD Livrango Admin Deployment
+name: Deploy Livrango Admin
 
 on:
   push:
-    branches:
-      - master
+    branches: [ main ] # Déclenchement automatique sur le push main
 
 jobs:
-
-  ###############################################
-  # 1) BUILD JOB — executed on GitHub Runner
-  ###############################################
-  build:
-    name: Build Laravel Project
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
-
-    # ------------------------------------------
-    # PHP SETUP
-    # ------------------------------------------
-    - name: Setup PHP
-      uses: shivammathur/setup-php@v2
-      with:
-        php-version: '8.3'
-        extensions: bcmath, pdo_mysql, mbstring, zip, tokenizer
-        coverage: none
-
-    - name: Install Composer Dependencies
-      run: composer install --no-dev --prefer-dist --optimize-autoloader
-
-    # ------------------------------------------
-    # CLEAR ALL LARAVEL CACHES BEFORE PACKAGING
-    # ------------------------------------------
-    - name: Clear Laravel caches BEFORE packaging
-      run: |
-        php artisan optimize:clear || true
-        rm -rf bootstrap/cache/*.php || true
-
-    # ------------------------------------------
-    # NODE BUILD
-    # ------------------------------------------
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
-        cache-dependency-path: package-lock.json
-
-    - name: Install NPM Dependencies
-      run: npm ci
-
-    - name: Build Frontend Assets
-      run: npm run build
-
-    # ------------------------------------------
-    # ZIP ARTIFACT
-    # ------------------------------------------
-    - name: Prepare Deployment Artifact
-      run: |
-        mkdir -p artifact
-        zip -r artifact/build.zip . -x "*.git*" "artifact/*"
-
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: build
-        path: artifact/build.zip
-
-
-  ###############################################
-  # 2) DEPLOY JOB — executed via SSH on your server
-  ###############################################
   deploy:
-    name: Deploy to Production Server
-    needs: build
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    # ------------------------------------------
-    # DOWNLOAD ARTIFACT
-    # ------------------------------------------
-    - name: Download Artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: build
-        path: ./artifact
+      # 1. Préparer PHP et Composer (Sur GitHub)
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, bcmath, gd, zip, dom
 
-    # ------------------------------------------
-    # PUSH TO SERVER — your structure confirmed
-    # ------------------------------------------
-    - name: Upload Artifact via SCP
-      uses: appleboy/scp-action@v0.1.7
-      with:
-        host: ${{ secrets.AWS_HOST }}
-        username: ${{ secrets.SSH_USERNAME }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        source: "./artifact"
-        target: "/var/www/livrango/admin/tmp/build.zip"
+      - name: Install Composer Dependencies
+        run: composer install --no-dev --optimize-autoloader --no-interaction --no-progress
 
-    # ------------------------------------------
-    # DEPLOY SCRIPT WITH SAFE MIGRATIONS
-    # ------------------------------------------
-    - name: Deploy via SSH
-      uses: appleboy/ssh-action@v1.0.0
-      with:
-        host: ${{ secrets.AWS_HOST }}
-        username: ${{ secrets.SSH_USERNAME }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
+      # 2. Préparer les assets JS/CSS (Sur GitHub)
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-        script: |
-          set -e
+      - name: Install & Build Frontend
+        run: |
+          npm install
+          npm run build
 
-          PROJECT_DIR="/var/www/livrango/admin"
-          RELEASES_DIR="$PROJECT_DIR/releases"
-          TMP_DIR="$PROJECT_DIR/tmp"
-          ZIP_PATH="$TMP_DIR/build.zip/artifact/build.zip"
+      # 3. Synchronisation des fichiers vers LWS (Rsync)
+      - name: Sync files to Server
+        uses: Burnett01/rsync-deployments@7.0.0
+        with:
+          switches: -avzr --delete
+          path: .
+          remote_host: ${{ secrets.SSH_HOST }}
+          remote_user: ${{ secrets.SSH_USER }}
+          remote_key: ${{ secrets.SSH_PRIVATE_KEY }}
+          remote_path: /home/c2717036c/livrango/admin/admin_text_logistique
+          # IMPORTANT : On ignore les fichiers locaux qui ne doivent pas écraser le serveur
+          args: --exclude=.env --exclude=/storage --exclude=.git --exclude=.github --exclude=node_modules
 
-          RELEASE_NAME=$(date +%Y%m%d_%H%M%S)
-          NEW_RELEASE="$RELEASES_DIR/$RELEASE_NAME"
-          PREVIOUS_RELEASE=$(readlink "$PROJECT_DIR/current" || echo "")
+      # 4. Exécution des commandes Laravel (Sur LWS)
+      - name: Post-deployment Commands
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY_LWS }}
+          script: |
+            cd /home/c2717036c/livrango/admin/admin_text_logistique
 
-          echo "=============================="
-          echo " 🔄 Starting deployment..."
-          echo " ZIP: $ZIP_PATH"
-          echo "=============================="
+            # Correction des droits pour éviter les erreurs 500
+            chmod -R 775 storage bootstrap/cache
 
-          rollback() {
-            echo "❌ Error detected — Rolling back..."
-
-            if [ -n "$PREVIOUS_RELEASE" ]; then
-              ln -sfn "$PREVIOUS_RELEASE" "$PROJECT_DIR/current"
-              echo "Rollback done ✔"
-            else
-              echo "No previous release to restore ❗"
-            fi
-
-            exit 1
-          }
-
-          trap rollback ERR
-
-          echo "📁 Creating directories..."
-          mkdir -p "$RELEASES_DIR"
-          mkdir -p "$TMP_DIR"
-          mkdir -p "$NEW_RELEASE"
-
-          echo "📦 Extracting..."
-          unzip -q "$ZIP_PATH" -d "$NEW_RELEASE"
-
-          echo "📁 Creating Laravel required directories..."
-          # Créer bootstrap/cache AVANT de définir les permissions
-          mkdir -p "$NEW_RELEASE/bootstrap/cache"
-          mkdir -p "$NEW_RELEASE/storage/framework/cache"
-          mkdir -p "$NEW_RELEASE/storage/framework/sessions"
-          mkdir -p "$NEW_RELEASE/storage/framework/views"
-          mkdir -p "$NEW_RELEASE/storage/logs"
-
-          echo "🔗 Linking storage..."
-          rm -rf "$NEW_RELEASE/storage"
-          ln -s "$PROJECT_DIR/storage" "$NEW_RELEASE/storage"
-
-          echo "🔐 Setting permissions..."
-          # Essayer sans sudo d'abord, puis avec sudo -n (non-interactif)
-          chown -R $USER:www-data "$NEW_RELEASE" 2>/dev/null || sudo -n chown -R $USER:www-data "$NEW_RELEASE" 2>/dev/null || true
-          chmod -R 755 "$NEW_RELEASE" 2>/dev/null || sudo -n chmod -R 755 "$NEW_RELEASE" 2>/dev/null || true
-          # Permissions spéciales pour les dossiers qui doivent être accessibles en écriture
-          chmod -R 775 "$NEW_RELEASE/bootstrap/cache" 2>/dev/null || sudo -n chmod -R 775 "$NEW_RELEASE/bootstrap/cache" 2>/dev/null || true
-          chmod -R 775 "$NEW_RELEASE/storage" 2>/dev/null || sudo -n chmod -R 775 "$NEW_RELEASE/storage" 2>/dev/null || true
-
-          echo "🔄 Switching symlink..."
-          if [ -e "$PROJECT_DIR/current" ]; then
-            rm -rf "$PROJECT_DIR/current"
-          fi
-          ln -sfn "$NEW_RELEASE" "$PROJECT_DIR/current"
-
-          if [ ! -L "$PROJECT_DIR/current" ]; then
-            echo "❌ Error: Failed to create symlink!"
-            exit 1
-          fi
-
-          echo "🚀 Running Laravel optimizations..."
-          cd "$PROJECT_DIR/current"
-
-          # Créer le lien symbolique public/storage
-          echo "🔗 Creating storage symlink..."
-          rm -f public/storage
-          php artisan storage:link || {
-            ln -s ../../storage/app/public public/storage || true
-          }
-
-          # Vérifier que bootstrap/cache existe et est accessible
-          if [ ! -d "bootstrap/cache" ]; then
-            echo "⚠️ Warning: bootstrap/cache does not exist, creating it..."
-            mkdir -p bootstrap/cache
-            chmod 775 bootstrap/cache 2>/dev/null || sudo -n chmod 775 bootstrap/cache || true
-          fi
-
-          # Vérifier les permissions
-          if [ ! -w "bootstrap/cache" ]; then
-            echo "⚠️ Warning: bootstrap/cache is not writable, fixing permissions..."
-            chmod 775 bootstrap/cache 2>/dev/null || sudo -n chmod 775 bootstrap/cache || true
-          fi
-
-          php artisan optimize:clear || true
-          php artisan config:cache
-          php artisan route:cache
-          php artisan view:cache || true
-
-          echo "🗄️ Running migrations..."
-          php artisan migrate --force
-
-          echo "🌱 Running seeds..."
-          php artisan db:seed --force || true
-
-          # Finaliser les permissions pour storage
-          echo "🔐 Finalizing storage permissions..."
-          chown -R $USER:www-data "$PROJECT_DIR/storage" 2>/dev/null || sudo -n chown -R $USER:www-data "$PROJECT_DIR/storage" 2>/dev/null || true
-          chmod -R 775 "$PROJECT_DIR/storage/app/public" 2>/dev/null || sudo -n chmod -R 775 "$PROJECT_DIR/storage/app/public" 2>/dev/null || true
-          chmod -R 775 "$PROJECT_DIR/storage/app/public/colis" 2>/dev/null || sudo -n chmod -R 775 "$PROJECT_DIR/storage/app/public/colis" 2>/dev/null || true
-
-          # Nettoyer les anciennes releases (garder les 5 dernières)
-          echo "🧹 Cleaning old releases..."
-          cd "$RELEASES_DIR"
-          ls -t | tail -n +6 | xargs -r rm -rf || true
-
-          echo "=============================="
-          echo " ✅ DEPLOYMENT SUCCESS"
-          echo "=============================="
+            # Nettoyage et optimisation du cache
+            php artisan migrate --force
+            php artisan optimize:clear
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache

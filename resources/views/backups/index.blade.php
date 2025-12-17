@@ -79,6 +79,14 @@
                                        class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300">
                                         Télécharger
                                     </a>
+                                    <form action="{{ route('backups.restore-file', $backup['filename']) }}" method="POST" class="inline">
+                                        @csrf
+                                        <button type="submit" 
+                                                onclick="return confirm('⚠️ ATTENTION : Êtes-vous sûr de vouloir restaurer cette sauvegarde ?\n\nCela écrasera TOUTES les données actuelles de la base de données.\n\nCette action est IRRÉVERSIBLE !')"
+                                                class="text-orange-600 hover:text-orange-900 dark:text-orange-400 dark:hover:text-orange-300">
+                                            Restaurer
+                                        </button>
+                                    </form>
                                     <form action="{{ route('backups.destroy', $backup['filename']) }}" method="POST" class="inline">
                                         @csrf
                                         @method('DELETE')

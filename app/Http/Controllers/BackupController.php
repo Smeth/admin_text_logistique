@@ -125,36 +125,229 @@ class BackupController extends Controller
             ->with('error', 'Fichier de sauvegarde introuvable');
     }
 
+    /**
+     * Vide toutes les tables de la base de données (TRUNCATE)
+     * Cela préserve la structure actuelle des tables (colonnes, index, contraintes)
+     */
+    private function truncateAllTables()
+    {
+        try {
+            \DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            
+            $tables = \DB::select('SHOW TABLES');
+            $database = config('database.connections.mysql.database');
+            $db = 'Tables_in_' . $database;
+            
+            foreach ($tables as $table) {
+                $tableName = $table->$db;
+                // Utiliser TRUNCATE au lieu de DROP pour préserver la structure
+                \DB::statement("TRUNCATE TABLE `{$tableName}`");
+            }
+            
+            \DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+            return true;
+        } catch (\Exception $e) {
+            \DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+            throw $e;
+        }
+    }
+
+    /**
+     * Prépare le SQL pour la restauration en ne gardant que les INSERT
+     * Ignore les CREATE TABLE pour préserver la structure actuelle des tables
+     */
+    private function prepareSqlForRestore($sql)
+    {
+        // Supprimer toutes les commandes CREATE TABLE (structure)
+        // On veut seulement restaurer les données (INSERT)
+        $sql = preg_replace(
+            '/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[^;]+;/i',
+            '',
+            $sql
+        );
+        
+        // Supprimer les DROP TABLE IF EXISTS
+        $sql = preg_replace(
+            '/DROP\s+TABLE\s+IF\s+EXISTS\s+[^;]+;/i',
+            '',
+            $sql
+        );
+        
+        // Supprimer les SET FOREIGN_KEY_CHECKS (on les gère nous-mêmes)
+        $sql = preg_replace(
+            '/SET\s+FOREIGN_KEY_CHECKS\s*=\s*[01];/i',
+            '',
+            $sql
+        );
+        
+        // Nettoyer les lignes vides multiples
+        $sql = preg_replace('/\n\s*\n\s*\n/', "\n\n", $sql);
+        
+        return $sql;
+    }
+
+    public function restoreFromFile($filename)
+    {
+        try {
+            $backupPath = storage_path('app/backups/' . $filename);
+            
+            // Vérifier que le fichier existe
+            if (!file_exists($backupPath)) {
+                return redirect()->route('backups.index')
+                    ->with('error', 'Fichier de sauvegarde introuvable : ' . $filename);
+            }
+
+            // Vérifier que le fichier n'est pas vide
+            if (filesize($backupPath) == 0) {
+                return redirect()->route('backups.index')
+                    ->with('error', 'Le fichier de sauvegarde est vide.');
+            }
+
+            // Vider toutes les tables existantes avant de restaurer (préserve la structure)
+            $this->truncateAllTables();
+
+            // Lire le fichier SQL
+            $sql = file_get_contents($backupPath);
+            
+            if ($sql === false || empty($sql)) {
+                return redirect()->route('backups.index')
+                    ->with('error', 'Impossible de lire le fichier de sauvegarde.');
+            }
+
+            // Préparer le SQL : ignorer les CREATE TABLE pour préserver la structure actuelle
+            // On ne garde que les INSERT pour restaurer les données
+            $sql = $this->prepareSqlForRestore($sql);
+            
+            if (empty(trim($sql))) {
+                return redirect()->route('backups.index')
+                    ->with('error', 'Le fichier de sauvegarde ne contient pas de données à restaurer (seulement la structure).');
+            }
+
+            // Désactiver temporairement les vérifications de clés étrangères
+            \DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            
+            // Diviser le fichier SQL en requêtes individuelles
+            $queries = array_filter(
+                array_map('trim', explode(';', $sql)),
+                function($query) {
+                    return !empty($query) && 
+                           !preg_match('/^--/', $query) && 
+                           !preg_match('/^\/\*/', $query);
+                }
+            );
+
+            try {
+                foreach ($queries as $query) {
+                    if (!empty(trim($query))) {
+                        \DB::unprepared($query);
+                    }
+                }
+                $restoreSuccess = true;
+            } catch (\Exception $e) {
+                \DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+                return redirect()->route('backups.index')
+                    ->with('error', 'Erreur lors de la restauration : ' . $e->getMessage());
+            }
+
+            // Réactiver les vérifications de clés étrangères
+            \DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+
+            return redirect()->route('backups.index')
+                ->with('success', 'Base de données restaurée avec succès depuis : ' . $filename);
+        } catch (\Exception $e) {
+            return redirect()->route('backups.index')
+                ->with('error', 'Erreur : ' . $e->getMessage());
+        }
+    }
+
     public function restore(Request $request)
     {
         $request->validate([
-            'backup_file' => 'required|file|mimes:sql'
+            'backup_file' => 'required|file'
         ]);
 
         try {
             $file = $request->file('backup_file');
+            
+            // Vérifier l'extension du fichier
+            $extension = $file->getClientOriginalExtension();
+            if (strtolower($extension) !== 'sql') {
+                return redirect()->route('backups.index')
+                    ->with('error', 'Le fichier doit être un fichier SQL (.sql)');
+            }
+
             $path = $file->storeAs('temp', 'restore_' . time() . '.sql');
             $fullPath = storage_path('app/' . $path);
 
-            $database = config('database.connections.mysql.database');
-            $username = config('database.connections.mysql.username');
-            $password = config('database.connections.mysql.password');
-            $host = config('database.connections.mysql.host');
+            // Vérifier que le fichier existe et n'est pas vide
+            if (!file_exists($fullPath) || filesize($fullPath) == 0) {
+                Storage::delete($path);
+                return redirect()->route('backups.index')
+                    ->with('error', 'Le fichier de sauvegarde est vide ou introuvable.');
+            }
 
-            $command = "mysql -h {$host} -u {$username} -p{$password} {$database} < \"{$fullPath}\" 2>&1";
-            exec($command, $output, $returnVar);
+            // Vider toutes les tables existantes avant de restaurer (préserve la structure)
+            $this->truncateAllTables();
+
+            // Lire le fichier SQL
+            $sql = file_get_contents($fullPath);
+            
+            if ($sql === false || empty($sql)) {
+                Storage::delete($path);
+                return redirect()->route('backups.index')
+                    ->with('error', 'Impossible de lire le fichier de sauvegarde.');
+            }
+
+            // Préparer le SQL : ignorer les CREATE TABLE pour préserver la structure actuelle
+            // On ne garde que les INSERT pour restaurer les données
+            $sql = $this->prepareSqlForRestore($sql);
+            
+            if (empty(trim($sql))) {
+                Storage::delete($path);
+                return redirect()->route('backups.index')
+                    ->with('error', 'Le fichier de sauvegarde ne contient pas de données à restaurer (seulement la structure).');
+            }
+
+            // Désactiver temporairement les vérifications de clés étrangères
+            \DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            
+            // Diviser le fichier SQL en requêtes individuelles
+            $queries = array_filter(
+                array_map('trim', explode(';', $sql)),
+                function($query) {
+                    return !empty($query) && 
+                           !preg_match('/^--/', $query) && 
+                           !preg_match('/^\/\*/', $query);
+                }
+            );
+
+            try {
+                foreach ($queries as $query) {
+                    if (!empty(trim($query))) {
+                        \DB::unprepared($query);
+                    }
+                }
+                $restoreSuccess = true;
+            } catch (\Exception $e) {
+                \DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+                Storage::delete($path);
+                return redirect()->route('backups.index')
+                    ->with('error', 'Erreur lors de la restauration : ' . $e->getMessage());
+            }
+
+            // Réactiver les vérifications de clés étrangères
+            \DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
             // Supprimer le fichier temporaire
             Storage::delete($path);
 
-            if ($returnVar === 0) {
-                return redirect()->route('backups.index')
-                    ->with('success', 'Base de données restaurée avec succès');
-            } else {
-                return redirect()->route('backups.index')
-                    ->with('error', 'Erreur lors de la restauration. Vérifiez que MySQL est accessible.');
-            }
+            return redirect()->route('backups.index')
+                ->with('success', 'Base de données restaurée avec succès');
         } catch (\Exception $e) {
+            // Supprimer le fichier temporaire en cas d'erreur
+            if (isset($path)) {
+                Storage::delete($path);
+            }
             return redirect()->route('backups.index')
                 ->with('error', 'Erreur : ' . $e->getMessage());
         }

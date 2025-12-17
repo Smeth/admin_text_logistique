@@ -2,7 +2,7 @@ name: Deploy Livrango Admin
 
 on:
   push:
-    branches: [ main ] # Déclenchement automatique sur le push main
+    branches: [ master ] # Déclenchement automatique sur le push main
 
 jobs:
   deploy:

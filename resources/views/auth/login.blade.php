@@ -61,13 +61,7 @@
             </form>
 
             <div class="mt-6 text-center">
-                <p class="text-sm text-gray-600 dark:text-gray-400">
-                    Pas encore de compte ?
-                    <a href="{{ route('register') }}" class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
-                        Créer un compte
-                    </a>
-                </p>
-                <p class="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                <p class="text-xs text-gray-500 dark:text-gray-400">
                     Créé et propulsé par <span class="font-semibold text-indigo-600 dark:text-indigo-400">@smeth-dev</span>
                 </p>
             </div>

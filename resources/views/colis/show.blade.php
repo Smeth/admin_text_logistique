@@ -66,7 +66,7 @@
             <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Transporteur</p><p class="text-lg text-gray-900 dark:text-white mt-1">{{ $coli->transporteur ? $coli->transporteur->nom_entreprise : 'Non assigné' }}</p></div>
             <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Devise</p><p class="text-lg text-gray-900 dark:text-white mt-1">{{ $coli->devise ? $coli->devise->nom . ' (' . $coli->devise->symbole . ')' : 'Non définie' }}</p></div>
             <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Tarif</p><p class="text-lg text-gray-900 dark:text-white mt-1">{{ $coli->tarif ? $coli->tarif->nom_tarif : 'Aucun' }}</p></div>
-            <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Frais Transport</p>
+            <div><p class="text-sm font-medium text-gray-500 dark:text-gray-400">Montant total à payer</p>
                 <p class="text-lg text-gray-900 dark:text-white mt-1">
                     {{ number_format($coli->frais_transport, 0, ',', ' ') }} {{ $coli->devise ? $coli->devise->symbole : 'FCFA' }}
                     @if($coli->frais_calcule && $coli->frais_calcule != $coli->frais_transport)

@@ -26,14 +26,14 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Poids (kg) <span class="text-red-500">*</span></label>
-                    <input type="number" 
-                           step="0.01" 
-                           min="0" 
-                           name="poids" 
+                    <input type="number"
+                           step="0.01"
+                           min="0"
+                           name="poids"
                            id="poids"
-                           value="{{ old('poids') }}" 
+                           value="{{ old('poids') }}"
                            placeholder="Ex: 2.50"
-                           required 
+                           required
                            class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
                     <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Valeur décimale uniquement (ex: 2.50 kg)</p>
                     @error('poids')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
@@ -64,14 +64,14 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Pays d'origine</label>
-                    <input type="text" name="pays_origine" value="{{ old('pays_origine') }}" 
+                    <input type="text" name="pays_origine" value="{{ old('pays_origine') }}"
                            placeholder="Ex: Cameroun, Sénégal..."
                            class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
                     @error('pays_origine')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Ville d'origine</label>
-                    <input type="text" name="ville_origine" value="{{ old('ville_origine') }}" 
+                    <input type="text" name="ville_origine" value="{{ old('ville_origine') }}"
                            placeholder="Ex: Douala, Dakar..."
                            class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
                     @error('ville_origine')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
@@ -100,26 +100,26 @@
                         <option value="retourne" {{ old('statut') === 'retourne' ? 'selected' : '' }}>Retourné</option>
                     </select>
                 </div>
-                
+
                 <!-- Champs pour description et localisation -->
                 <div id="description_etape_container" class="md:col-span-2">
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Description de l'étape
                     </label>
-                    <textarea name="description_etape" 
+                    <textarea name="description_etape"
                               id="description_etape"
                               rows="3"
                               placeholder="Décrivez cette étape (ex: Colis emballé et prêt pour l'expédition. Poids vérifié: 2.5kg)"
                               class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">{{ old('description_etape') }}</textarea>
                     <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Ajoutez des détails sur cette étape (optionnel)</p>
                 </div>
-                
+
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Localisation actuelle
                     </label>
-                    <input type="text" 
-                           name="localisation_etape" 
+                    <input type="text"
+                           name="localisation_etape"
                            id="localisation_etape"
                            value="{{ old('localisation_etape') }}"
                            placeholder="Ex: Entrepôt Douala, Aéroport Yaoundé..."
@@ -162,17 +162,18 @@
                     <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Sélectionnez un tarif pour calculer automatiquement le prix</p>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Frais transport <span class="text-red-500">*</span></label>
-                    <input type="text" 
-                           name="frais_transport" 
-                           id="frais_transport" 
-                           value="{{ old('frais_transport') ? number_format(old('frais_transport'), 0, ',', ' ') : '' }}" 
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Montant total à payer <span class="text-red-500">*</span></label>
+                    <input type="text"
+                           name="frais_transport"
+                           id="frais_transport"
+                           value="{{ old('frais_transport') ? number_format((float) str_replace([' ', ','], '', old('frais_transport')), 0, ',', ' ') : '' }}"
                            placeholder="Ex: 10 000"
-                           required 
+                           required
                            class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
                     <input type="hidden" id="frais_transport_raw" name="frais_transport_raw">
                     <p id="prix_calcule_info" class="mt-1 text-xs text-green-600 dark:text-green-400 hidden"></p>
                     <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Format: séparateurs de milliers automatiques</p>
+                    @error('frais_transport')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Valeur déclarée</label>
@@ -205,12 +206,12 @@
                             <input id="images_upload" type="file" name="images[]" multiple accept="image/jpeg,image/png,image/webp" class="hidden">
                         </label>
                     </div>
-                    
+
                     <!-- Compteur d'images -->
                     <div id="images_count" class="hidden text-sm font-medium text-gray-700 dark:text-gray-300">
                         <span id="images_count_number">0</span> image(s) sélectionnée(s)
                     </div>
-                    
+
                     <!-- Aperçu des images sélectionnées -->
                     <div id="images_preview" class="grid grid-cols-2 md:grid-cols-4 gap-4 hidden">
                         <!-- Les miniatures seront ajoutées ici par JavaScript -->
@@ -223,7 +224,7 @@
             <!-- Section Paiement -->
             <div class="border-t border-gray-200 dark:border-slate-700 pt-6">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Paiement</h3>
-                
+
                 <div class="space-y-4">
                     <div class="flex items-center gap-6">
                         <div class="flex items-center">
@@ -250,22 +251,22 @@
                             </select>
                             @error('caisse_id')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                         </div>
-                        
+
                         <div id="montant_paiement_container">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Montant payé (FCFA) <span class="text-red-500">*</span>
                             </label>
-                            <input type="number" 
-                                   step="0.01" 
-                                   name="montant_paye" 
-                                   id="montant_paye" 
-                                   value="{{ old('montant_paye') }}" 
+                            <input type="number"
+                                   step="0.01"
+                                   name="montant_paye"
+                                   id="montant_paye"
+                                   value="{{ old('montant_paye') }}"
                                    min="0.01"
                                    class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white">
                             <p id="montant_restant_info" class="mt-1 text-xs text-gray-500 dark:text-gray-400"></p>
                             @error('montant_paye')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                         </div>
-                        
+
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Mode de paiement
@@ -332,13 +333,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const value = this.value;
         const numericValue = parseFormattedNumber(value);
         const formatted = formatNumber(numericValue);
-        
+
         this.value = formatted;
-        
+
         // Restaurer la position du curseur
         const diff = formatted.length - value.length;
         this.setSelectionRange(cursorPosition + diff, cursorPosition + diff);
-        
+
         // Mettre à jour la valeur brute pour le calcul
         fraisTransportRaw.value = numericValue;
     });
@@ -348,20 +349,37 @@ document.addEventListener('DOMContentLoaded', function() {
     form.addEventListener('submit', function(e) {
         const formattedValue = fraisTransportInput.value;
         const numericValue = parseFormattedNumber(formattedValue);
-        
-        // Créer un champ caché avec la valeur numérique ou remplacer la valeur
-        if (fraisTransportRaw) {
-            fraisTransportRaw.value = numericValue;
-            fraisTransportRaw.name = 'frais_transport';
+
+        // S'assurer que la valeur numérique est toujours envoyée
+        if (numericValue > 0) {
+            // Mettre à jour le champ caché avec la valeur numérique
+            if (fraisTransportRaw) {
+                fraisTransportRaw.value = numericValue;
+                fraisTransportRaw.name = 'frais_transport';
+            } else {
+                // Créer un input caché avec la valeur numérique
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = 'frais_transport';
+                hiddenInput.value = numericValue;
+                form.appendChild(hiddenInput);
+            }
+            // Désactiver l'input visible pour qu'il ne soit pas envoyé
             fraisTransportInput.name = '';
+            fraisTransportInput.disabled = true;
+
+            // S'assurer que montant_paye est rempli si paiement_complet est coché
+            const paiementCompletCheckbox = document.getElementById('paiement_complet');
+            const montantPayeInput = document.getElementById('montant_paye');
+            if (paiementCompletCheckbox && paiementCompletCheckbox.checked && montantPayeInput) {
+                montantPayeInput.value = numericValue.toFixed(2);
+            }
         } else {
-            // Créer un input caché avec la valeur numérique
-            const hiddenInput = document.createElement('input');
-            hiddenInput.type = 'hidden';
-            hiddenInput.name = 'frais_transport';
-            hiddenInput.value = numericValue;
-            form.appendChild(hiddenInput);
-            fraisTransportInput.name = '';
+            // Si la valeur est invalide, empêcher la soumission
+            e.preventDefault();
+            alert('Veuillez saisir un montant valide pour les frais de transport.');
+            fraisTransportInput.focus();
+            return false;
         }
     });
 
@@ -432,7 +450,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (paiementComplet.checked || paiementPartiel.checked) {
             paiementSection.classList.remove('hidden');
             caisseSelect.required = true;
-            
+
             if (paiementComplet.checked) {
                 // Si paiement complet, pré-remplir avec le montant total
                 const fraisTransport = parseFormattedNumber(fraisTransportInput.value) || 0;
@@ -461,7 +479,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const fraisTransport = parseFormattedNumber(fraisTransportInput.value) || 0;
         const montantPaye = parseFloat(montantPayeInput.value) || 0;
         const restant = fraisTransport - montantPaye;
-        
+
         if (montantPaye > 0) {
             if (restant > 0) {
                 montantRestantInfo.textContent = `Reste à payer: ${restant.toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 2})} FCFA`;
@@ -527,7 +545,7 @@ document.addEventListener('DOMContentLoaded', function() {
             imagesPreview.classList.remove('hidden');
             imagesCount.classList.remove('hidden');
             imagesCountNumber.textContent = selectedImages.length;
-            
+
             imagesPreview.innerHTML = '';
             selectedImages.forEach((file, index) => {
                 const reader = new FileReader();
@@ -566,12 +584,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     imagesUpload.addEventListener('change', function(e) {
         const files = Array.from(e.target.files);
-        
+
         // Vérifier la taille de chaque fichier (max 4 Mo)
         const maxSize = 4 * 1024 * 1024; // 4 Mo en octets
         const validFiles = [];
         const invalidFiles = [];
-        
+
         files.forEach(file => {
             if (file.size > maxSize) {
                 invalidFiles.push(file.name);
@@ -579,11 +597,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 validFiles.push(file);
             }
         });
-        
+
         if (invalidFiles.length > 0) {
             alert(`Les fichiers suivants sont trop volumineux (max 4 Mo) :\n${invalidFiles.join('\n')}`);
         }
-        
+
         // Ajouter les fichiers valides à la liste
         selectedImages = [...selectedImages, ...validFiles];
         updateFileInput();
@@ -592,7 +610,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Gestion du glisser-déposer
     const dropZone = imagesUpload.closest('label');
-    
+
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         dropZone.addEventListener(eventName, preventDefaults, false);
     });
@@ -615,11 +633,11 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     dropZone.addEventListener('drop', function(e) {
-        const files = Array.from(e.dataTransfer.files).filter(file => 
-            file.type.startsWith('image/') && 
+        const files = Array.from(e.dataTransfer.files).filter(file =>
+            file.type.startsWith('image/') &&
             ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)
         );
-        
+
         if (files.length > 0) {
             const maxSize = 4 * 1024 * 1024;
             const validFiles = files.filter(file => file.size <= maxSize);

@@ -49,17 +49,17 @@ class ColiController extends Controller
     {
         $user = auth()->user();
         $clients = Client::where('statut', 'actif')->orderBy('nom')->get();
-        
+
         // Filtrer les agences pour responsable d'agence
         $agences = Agence::orderBy('nom_agence')->get();
         if ($user->isResponsableAgence() && $user->agence_id) {
             $agences = Agence::where('id', $user->agence_id)->get();
         }
-        
+
         $transporteurs = EntrepriseTransporteur::where('statut', 'actif')->orderBy('nom_entreprise')->get();
         $devises = Devise::where('actif', true)->orderBy('est_principale', 'desc')->orderBy('nom')->get();
         $tarifs = Tarif::where('actif', true)->orderBy('nom_tarif')->get();
-        
+
         // Filtrer les caisses pour responsable d'agence
         $caisses = Caisse::where('statut', 'ouverte')->orderBy('nom_caisse')->get();
         if ($user->isResponsableAgence() && $user->agence_id) {
@@ -68,12 +68,28 @@ class ColiController extends Controller
                 ->orderBy('nom_caisse')
                 ->get();
         }
-        
+
         return view('colis.create', compact('clients', 'agences', 'transporteurs', 'devises', 'tarifs', 'caisses'));
     }
 
     public function store(Request $request)
     {
+        // Nettoyer frais_transport avant validation (enlever espaces, virgules et autres caractères non numériques sauf le point)
+        if ($request->has('frais_transport')) {
+            $fraisTransport = $request->frais_transport;
+            // Enlever tous les espaces, virgules et autres caractères non numériques sauf le point
+            $fraisTransport = preg_replace('/[^\d.]/', '', $fraisTransport);
+            // Convertir en float puis en entier si c'est un nombre entier
+            $fraisTransportNumeric = floatval($fraisTransport);
+            $request->merge(['frais_transport' => $fraisTransportNumeric]);
+        }
+
+        // Préparer montant_paye si paiement_complet est coché
+        $paiementComplet = $request->has('paiement_complet') && $request->paiement_complet;
+        if ($paiementComplet && $request->has('frais_transport')) {
+            $request->merge(['montant_paye' => $request->frais_transport]);
+        }
+
         $validated = $request->validate([
             'client_id' => 'required|exists:clients,id',
             'numero_suivi' => 'required|string|unique:colis,numero_suivi',
@@ -96,7 +112,7 @@ class ColiController extends Controller
             'paiement_complet' => 'boolean',
             'paiement_partiel' => 'boolean',
             'caisse_id' => 'nullable|required_with:paiement_complet,paiement_partiel|exists:caisses,id',
-            'montant_paye' => 'nullable|required_with:paiement_partiel|numeric|min:0.01',
+            'montant_paye' => 'nullable|required_with:paiement_complet,paiement_partiel|numeric|min:0.01',
             'mode_paiement' => 'nullable|in:espece,carte,virement,cheque,mobile_money',
             'description_etape' => 'nullable|string|max:1000',
             'localisation_etape' => 'nullable|string|max:255',
@@ -126,7 +142,7 @@ class ColiController extends Controller
         );
 
         $coli = Coli::create($validated);
-        
+
         // Enregistrer l'historique de création
         ColisHistorique::create([
             'coli_id' => $coli->id,
@@ -149,7 +165,7 @@ class ColiController extends Controller
                 ]);
             }
         }
-        
+
         // Calculer automatiquement le prix si un tarif est sélectionné
         if ($coli->tarif && $coli->poids) {
             $prixCalcule = $coli->tarif->calculerPrix(
@@ -158,7 +174,7 @@ class ColiController extends Controller
                 $coli->agence_arrivee_id,
                 $coli->transporteur_id
             );
-            
+
             if ($prixCalcule) {
                 $coli->update(['frais_calcule' => $prixCalcule]);
                 // Si aucun prix manuel n'a été saisi, utiliser le prix calculé
@@ -171,7 +187,7 @@ class ColiController extends Controller
         // Gérer le paiement si demandé
         if (($paiementComplet || $paiementPartiel) && $caisseId) {
             $caisse = Caisse::findOrFail($caisseId);
-            
+
             // Vérifier que la caisse est ouverte
             if (!$caisse->isOuverte()) {
                 return back()->withInput()
@@ -212,10 +228,10 @@ class ColiController extends Controller
                 'client_id' => $coli->client_id,
                 'user_id' => auth()->id(),
                 'date_transaction' => now(),
-                'description' => ($paiementPartiel ? 'Acompte de ' : 'Paiement de ') . 
-                    number_format($montantPaye, 0, ',', ' ') . ' ' . $deviseColis->symbole . 
-                    ($deviseCaisse && $deviseCaisse->id !== $deviseColis->id ? 
-                        ' (converti: ' . number_format($montantEnregistre, 0, ',', ' ') . ' ' . $deviseCaisse->symbole . ')' : '') . 
+                'description' => ($paiementPartiel ? 'Acompte de ' : 'Paiement de ') .
+                    number_format($montantPaye, 0, ',', ' ') . ' ' . $deviseColis->symbole .
+                    ($deviseCaisse && $deviseCaisse->id !== $deviseColis->id ?
+                        ' (converti: ' . number_format($montantEnregistre, 0, ',', ' ') . ' ' . $deviseCaisse->symbole . ')' : '') .
                     ' pour le colis ' . $coli->numero_suivi . ' - Client: ' . $coli->client->full_name,
             ]);
 
@@ -229,8 +245,8 @@ class ColiController extends Controller
                 'mode_paiement' => $modePaiement,
                 'date_paiement' => now(),
                 'user_id' => auth()->id(),
-                'notes' => ($paiementPartiel ? 'Acompte' : 'Paiement complet') . 
-                    ($deviseCaisse && $deviseCaisse->id !== $deviseColis->id ? 
+                'notes' => ($paiementPartiel ? 'Acompte' : 'Paiement complet') .
+                    ($deviseCaisse && $deviseCaisse->id !== $deviseColis->id ?
                         ' (converti en ' . $deviseCaisse->symbole . ')' : ''),
             ]);
 
@@ -269,17 +285,17 @@ class ColiController extends Controller
         $user = auth()->user();
         $coli->load(['client', 'agenceDepart', 'agenceArrivee', 'transporteur', 'devise', 'tarif', 'paiements', 'images']);
         $clients = Client::where('statut', 'actif')->orderBy('nom')->get();
-        
+
         // Filtrer les agences pour responsable d'agence
         $agences = Agence::orderBy('nom_agence')->get();
         if ($user->isResponsableAgence() && $user->agence_id) {
             $agences = Agence::where('id', $user->agence_id)->get();
         }
-        
+
         $transporteurs = EntrepriseTransporteur::where('statut', 'actif')->orderBy('nom_entreprise')->get();
         $devises = Devise::where('actif', true)->orderBy('est_principale', 'desc')->orderBy('nom')->get();
         $tarifs = Tarif::where('actif', true)->orderBy('nom_tarif')->get();
-        
+
         // Filtrer les caisses pour responsable d'agence
         $caisses = Caisse::where('statut', 'ouverte')->orderBy('nom_caisse')->get();
         if ($user->isResponsableAgence() && $user->agence_id) {
@@ -288,7 +304,7 @@ class ColiController extends Controller
                 ->orderBy('nom_caisse')
                 ->get();
         }
-        
+
         return view('colis.edit', compact('coli', 'clients', 'agences', 'transporteurs', 'devises', 'tarifs', 'caisses'));
     }
 
@@ -327,10 +343,10 @@ class ColiController extends Controller
         $descriptionEtape = $request->input('description_etape');
         $localisationEtape = $request->input('localisation_etape');
         $images = $request->file('images', []);
-        
+
         // Retirer les champs d'historique de validated avant de mettre à jour
         unset($validated['description_etape'], $validated['localisation_etape'], $validated['images']);
-        
+
         $coli->update($validated);
 
         // Ajouter de nouvelles images si fournies
@@ -345,7 +361,7 @@ class ColiController extends Controller
                 ]);
             }
         }
-        
+
         // Si le statut a changé, enregistrer dans l'historique
         if ($statutAvant !== $coli->statut) {
             ColisHistorique::create([
@@ -357,7 +373,7 @@ class ColiController extends Controller
                 'localisation' => $localisationEtape ?: ($coli->agenceArrivee->nom_agence ?? $coli->agenceDepart->nom_agence ?? null),
             ]);
         }
-        
+
         // Recalculer le prix si un tarif est sélectionné
         if ($coli->tarif && $coli->poids) {
             $prixCalcule = $coli->tarif->calculerPrix(
@@ -366,7 +382,7 @@ class ColiController extends Controller
                 $coli->agence_arrivee_id,
                 $coli->transporteur_id
             );
-            
+
             if ($prixCalcule) {
                 $coli->update(['frais_calcule' => $prixCalcule]);
             }
@@ -375,7 +391,7 @@ class ColiController extends Controller
         // Gérer l'ajout d'un acompte supplémentaire
         if ($request->has('caisse_id') && $request->has('montant_paye') && $request->montant_paye > 0) {
             $caisse = Caisse::findOrFail($request->caisse_id);
-            
+
             // Vérifier que la caisse est ouverte
             if (!$caisse->isOuverte()) {
                 return back()->withInput()

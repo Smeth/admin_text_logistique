@@ -310,6 +310,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const fraisTransportRaw = document.getElementById('frais_transport_raw');
     const prixCalculeInfo = document.getElementById('prix_calcule_info');
     const deviseSelect = document.getElementById('devise_id');
+
+    // Variable pour indiquer si le calcul est en cours (pour éviter les conflits)
+    let calculEnCours = false;
+
     // Fonction pour formater un nombre avec séparateurs de milliers
     function formatNumber(num) {
         if (!num && num !== 0) return '';
@@ -327,8 +331,13 @@ document.addEventListener('DOMContentLoaded', function() {
         return isNaN(num) ? 0 : num;
     }
 
-    // Formater le champ frais de transport
+    // Formater le champ frais de transport (seulement si ce n'est pas un calcul automatique)
     fraisTransportInput.addEventListener('input', function(e) {
+        // Ne pas formater si c'est un calcul automatique qui a rempli le champ
+        if (calculEnCours) {
+            return;
+        }
+
         const cursorPosition = this.selectionStart;
         const value = this.value;
         const numericValue = parseFormattedNumber(value);
@@ -341,7 +350,9 @@ document.addEventListener('DOMContentLoaded', function() {
         this.setSelectionRange(cursorPosition + diff, cursorPosition + diff);
 
         // Mettre à jour la valeur brute pour le calcul
-        fraisTransportRaw.value = numericValue;
+        if (fraisTransportRaw) {
+            fraisTransportRaw.value = numericValue;
+        }
     });
 
     // Convertir la valeur formatée en valeur numérique avant soumission
@@ -384,12 +395,14 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
 
-    // Formater le poids avec 2 décimales
+    // Formater le poids avec 2 décimales et déclencher le calcul
     poidsInput.addEventListener('blur', function() {
         const value = parseFloat(this.value);
         if (!isNaN(value) && value >= 0) {
             this.value = value.toFixed(2);
         }
+        // Déclencher le calcul après formatage
+        calculerPrix();
     });
 
     // Calculer le prix automatiquement
@@ -419,9 +432,19 @@ document.addEventListener('DOMContentLoaded', function() {
             prix = prixMaximum;
         }
 
+        // Indiquer que le calcul est en cours pour éviter les conflits
+        calculEnCours = true;
+
         // Mettre à jour le champ frais_transport avec formatage
         fraisTransportInput.value = formatNumber(prix);
-        fraisTransportRaw.value = prix;
+        if (fraisTransportRaw) {
+            fraisTransportRaw.value = prix;
+        }
+
+        // Réinitialiser le flag après un court délai
+        setTimeout(() => {
+            calculEnCours = false;
+        }, 100);
 
         // Afficher l'info
         const selectedOption = deviseSelect.options[deviseSelect.selectedIndex];
@@ -430,11 +453,14 @@ document.addEventListener('DOMContentLoaded', function() {
         prixCalculeInfo.classList.remove('hidden');
     }
 
+    // Déclencher le calcul quand le poids change
     poidsInput.addEventListener('input', calculerPrix);
+
+    // Déclencher le calcul quand le tarif change
     tarifSelect.addEventListener('change', calculerPrix);
 
     // Calculer au chargement si des valeurs existent
-    if (poidsInput.value && tarifSelect.value) {
+    if (poidsInput && poidsInput.value && tarifSelect && tarifSelect.value) {
         calculerPrix();
     }
 

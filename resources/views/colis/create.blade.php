@@ -368,6 +368,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 fraisTransportRaw.value = numericValue;
                 fraisTransportRaw.name = 'frais_transport';
             } else {
+
                 // Créer un input caché avec la valeur numérique
                 const hiddenInput = document.createElement('input');
                 hiddenInput.type = 'hidden';

@@ -407,17 +407,34 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Calculer le prix automatiquement
     function calculerPrix() {
+        if (!poidsInput || !tarifSelect || !fraisTransportInput) {
+            console.log('Éléments manquants pour le calcul');
+            return;
+        }
+
         const poids = parseFloat(poidsInput.value) || 0;
         const tarifOption = tarifSelect.options[tarifSelect.selectedIndex];
 
+        // Vérifier que le tarif est sélectionné et que le poids est valide
         if (!tarifOption || !tarifOption.value || poids <= 0) {
-            prixCalculeInfo.classList.add('hidden');
+            if (prixCalculeInfo) {
+                prixCalculeInfo.classList.add('hidden');
+            }
+            console.log('Conditions non remplies:', { tarif: tarifOption?.value, poids: poids });
             return;
         }
 
         const prixParKilo = parseFloat(tarifOption.getAttribute('data-prix-kilo')) || 0;
         const prixMinimum = parseFloat(tarifOption.getAttribute('data-prix-min')) || 0;
         const prixMaximum = tarifOption.getAttribute('data-prix-max') ? parseFloat(tarifOption.getAttribute('data-prix-max')) : null;
+
+        // Vérifier que les valeurs sont valides
+        if (prixParKilo <= 0) {
+            if (prixCalculeInfo) {
+                prixCalculeInfo.classList.add('hidden');
+            }
+            return;
+        }
 
         // Calculer le prix
         let prix = poids * prixParKilo;
@@ -447,22 +464,45 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 100);
 
         // Afficher l'info
-        const selectedOption = deviseSelect.options[deviseSelect.selectedIndex];
-        const symbole = selectedOption ? selectedOption.getAttribute('data-symbole') || 'FCFA' : 'FCFA';
-        prixCalculeInfo.textContent = `Prix calculé automatiquement: ${formatNumber(prix)} ${symbole}`;
-        prixCalculeInfo.classList.remove('hidden');
+        if (prixCalculeInfo) {
+            const selectedOption = deviseSelect ? deviseSelect.options[deviseSelect.selectedIndex] : null;
+            const symbole = selectedOption ? selectedOption.getAttribute('data-symbole') || 'FCFA' : 'FCFA';
+            prixCalculeInfo.textContent = `Prix calculé automatiquement: ${formatNumber(prix)} ${symbole}`;
+            prixCalculeInfo.classList.remove('hidden');
+        }
     }
 
     // Déclencher le calcul quand le poids change
-    poidsInput.addEventListener('input', calculerPrix);
+    if (poidsInput) {
+        poidsInput.addEventListener('input', function() {
+            // Calculer immédiatement si un tarif est sélectionné
+            if (tarifSelect && tarifSelect.value) {
+                calculerPrix();
+            }
+        });
+    }
 
     // Déclencher le calcul quand le tarif change
-    tarifSelect.addEventListener('change', calculerPrix);
-
-    // Calculer au chargement si des valeurs existent
-    if (poidsInput && poidsInput.value && tarifSelect && tarifSelect.value) {
-        calculerPrix();
+    if (tarifSelect) {
+        tarifSelect.addEventListener('change', function() {
+            // Calculer immédiatement si un poids est saisi
+            if (poidsInput && poidsInput.value) {
+                calculerPrix();
+            }
+        });
     }
+
+    // Calculer au chargement si des valeurs existent (avec un petit délai pour s'assurer que tout est chargé)
+    setTimeout(function() {
+        if (poidsInput && tarifSelect && fraisTransportInput) {
+            const poids = parseFloat(poidsInput.value) || 0;
+            const tarifValue = tarifSelect.value;
+
+            if (poids > 0 && tarifValue) {
+                calculerPrix();
+            }
+        }
+    }, 200);
 
     // Gestion des paiements (complet/partiel)
     const paiementComplet = document.getElementById('paiement_complet');
